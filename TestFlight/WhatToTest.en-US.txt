@@ -1,0 +1,9 @@
+Welcome to the first Supper beta.
+
+- Save a recipe using only a photo and title.
+- Import a recipe from a website with structured recipe information.
+- Browse recipes, open recipe details, and add ingredients to the grocery list.
+- Check and uncheck groceries.
+- Close and reopen the app to check that recipes and groceries persist, including offline.
+
+Household invitations and AI-assisted recipe cleanup are still in development.

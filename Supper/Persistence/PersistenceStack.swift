@@ -56,7 +56,7 @@ final class PersistenceStack {
     }
 
     func load() async throws {
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let lock = NSLock()
             var remaining = container.persistentStoreDescriptions.count
             var firstError: Error?
