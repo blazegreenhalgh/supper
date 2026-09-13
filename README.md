@@ -32,7 +32,13 @@ The first pass includes:
 Bundle identifier: `com.blazegreenhalgh.Supper`  
 CloudKit container: `iCloud.com.blazegreenhalgh.Supper`
 
-After opening the project in Xcode, enable the iCloud / CloudKit capability for the Supper target and ensure the container exists in the Apple Developer account.
+The app's signing profile includes this container. Production schema deployment
+and multi-account sync still need verification.
+
+## TestFlight
+
+See [TestFlight and Xcode Cloud setup](docs/testflight.md) for the app record,
+verification results, and the remaining repository access and delivery setup.
 
 ## AI import direction
 
