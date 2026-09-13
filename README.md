@@ -37,8 +37,9 @@ and multi-account sync still need verification.
 
 ## TestFlight
 
-See [TestFlight and Xcode Cloud setup](docs/testflight.md) for the app record,
-verification results, and the remaining repository access and delivery setup.
+Pushes to `main` trigger Xcode Cloud builds and deliver successful archives to the
+internal TestFlight **Testing** group. See [TestFlight and Xcode Cloud](docs/testflight.md)
+for the workflow, tester instructions, and verification details.
 
 ## AI import direction
 
