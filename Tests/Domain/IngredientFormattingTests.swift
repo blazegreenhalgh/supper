@@ -22,6 +22,7 @@ import Testing
         ("1 lb / 500g beef mince / ground beef", "500", "g", "Beef mince / ground beef"),
         ("800 g (28 oz) crushed tomato", "800", "g", "Crushed tomato"),
         ("Butter (100–200 grams)", "100–200", "g", "Butter"),
+        ("BUTTER 200 g", "200", "g", "Butter"),
         ("1½ oz CHEESE", "1½", "oz", "Cheese"),
         ("1/2 oz yeast", "1/2", "oz", "Yeast"),
         ("8 oz. cream cheese", "8", "oz", "Cream cheese"),

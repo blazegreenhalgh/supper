@@ -95,10 +95,10 @@ public enum IngredientFormatting {
             let between = text[r].trimmingCharacters(in: .whitespacesAndNewlines)
             guard ["/", "(", "or"].contains(between.lowercased()) else { return false }
         }
-        // Extract a leading amount, or an explicit trailing amount in brackets/after a comma.
+        // A lone trailing weight is also explicit: "Butter 200 g" or "Butter (200 g)".
+        // Counts and package qualifiers have already been excluded above.
         let leading = before.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "•*-(["))).isEmpty
-        let trailing = after.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ")]"))).isEmpty &&
-            ["(", "[", ","].contains(before.trimmingCharacters(in: .whitespaces).last.map(String.init) ?? "")
+        let trailing = after.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ")]"))).isEmpty
         return leading || trailing
     }
     private static func weightUnit(_ text: String) -> String? {
