@@ -18,21 +18,26 @@ The reported TestFlight error is `Cannot create new type cloudkit.share in produ
 
 For team **H8STHXYFGD**, container **iCloud.com.blazegreenhalgh.Supper**:
 
-1. In CloudKit Console, select **CloudKit Database**, the Supper container and its development environment.
-2. Confirm `cloudkit.share` exists under Record Types. If it is absent, run the current Supper Debug build from Xcode on a device signed into iCloud, then create an invitation using a disposable development library. This exercises the actual Core Data sharing flow and creates Apple's sharing record type. Do not attempt to create the reserved type as a custom record.
-3. Check the development schema also includes the current Core Data model's entities and fields (see `household-update.md`). Use a dedicated development schema initialization workflow when needed; never call `initializeCloudKitSchema` in production or as a normal app launch operation.
-4. Select **Deploy Schema Changes**, review the additive changes, then **Deploy**. This copies schema, not development recipes. Do not reset an environment or delete production records.
-5. Retry Invite or manage sharing in TestFlight. Verify opening an existing invitation, sending a new one, recipient acceptance and updates between two different Apple accounts.
+- Both development and production initially listed only `Users`. There were no pending schema changes to deploy.
+- Created `cloudkit.share` using CloudKit Console's native New Record Type action. Apple generated its nine standard metadata fields automatically.
+- Prepared `Config/CloudKitSchema.ckdb` from the current managed object model, using Apple's documented Core Data mappings and the generated sharing/move-receipt metadata already used by the Envelopes app. It includes all eight entities, string/binary asset companions, to-one relationship keys and sharing metadata. It contains no user records.
+- CloudKit Console reported **Validation Passed**, then **The schema was successfully imported** in development. Existing `Users` and `cloudkit.share` definitions were retained.
+- The production deployment preview contains only nine new record types and their required indexes/default schema role grants. No existing types, fields, or user records are removed. The app continues to store recipes in private/shared databases; schema grants do not publish those private records to the public database.
+- **Production deployment is pending explicit approval.** Automatic approval review rejected clicking Deploy because it changes production schema and role definitions. Production has not been changed.
 
-The CloudKit Console requires Apple sign-in in this workspace. No server schema deployment has been performed by this code change.
+To finish: in the Supper development container, select **Deploy Schema Changes**, review the prepared additions and click **Deploy** after approval. Then retry Invite or manage sharing in TestFlight. Verify opening an existing invitation, sending a new one, recipient acceptance and two-account recipe/grocery sync. Do not reset an environment or delete production records.
+
+For future model changes, update the checked schema and its regression test or initialize it using a dedicated iCloud-enabled development build. Never call `initializeCloudKitSchema` in production or on every normal app launch.
 
 ## Verification
 
 Added persistence coverage for graph cascade/isolation, keeping a non-active selection, selecting a remaining incoming library, removal of the last library, missing sharing metadata, stale IDs/concurrent actions, visible offline account feedback and nested production-schema errors. Added a UI regression for Check iCloud feedback, cancelling removal and confirming removal.
 
-The editing workspace has no Swift or Xcode toolchain. Apple's frameworks and the new tests must run in the repository's macOS CI. Signed-device owner deletion, participant leaving, offline/retry behavior and two-account sharing still require live verification. Production schema deployment is a separate gate from an app build.
+The repository's macOS CI passed the domain and persistence tests, including the schema/model comparison, and built the iOS simulator app. UI regression execution is tracked in PR #3. The editing workspace has no Apple toolchain. Signed-device owner deletion, participant leaving, offline/retry behavior and two-account sharing still require live verification. Production schema deployment is a separate gate from an app build.
 
 ## Apple references
 
 - [Sharing Core Data objects between iCloud users](https://developer.apple.com/documentation/coredata/sharing-core-data-objects-between-icloud-users) — schema initialization, TestFlight's production environment, and purge behavior for owners/participants.
 - [Deploying an iCloud Container’s Schema](https://developer.apple.com/documentation/cloudkit/deploying-an-icloud-container-s-schema) — reviewing and deploying additive development schema changes.
+
+- [Reading CloudKit Records for Core Data](https://developer.apple.com/documentation/coredata/reading-cloudkit-records-for-core-data) — record names, attribute types, asset companions and relationship fields.
