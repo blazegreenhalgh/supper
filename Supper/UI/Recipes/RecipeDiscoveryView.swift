@@ -293,8 +293,7 @@ private struct RecipeDiscoveryStack: View {
     }
 
     private func card(_ suggestion: RecipeSuggestion, index: Int) -> some View {
-        Button { open(suggestion.id) } label: {
-            VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 14) {
                 RecipeCardView(recipe: suggestion.recipe)
                 HStack(spacing: 6) {
                     Image(systemName: suggestion.mode == .online ? "globe" : "sparkles")
@@ -302,7 +301,7 @@ private struct RecipeDiscoveryStack: View {
                     Spacer()
                     Image(systemName: "arrow.up.right")
                 }.font(.caption).foregroundStyle(.secondary)
-            }.padding(16).background(SupperStyle.surface, in: .rect(cornerRadius: 32))
+        }.padding(16).background(SupperStyle.surface, in: .rect(cornerRadius: 32))
                 .overlay(alignment: drag.width > 0 ? .topLeading : .topTrailing) {
                     if index == 0 && abs(drag.width) > 25 {
                         Text(drag.width > 0 ? "KEEP" : "PASS").font(.title2.bold())
@@ -312,10 +311,13 @@ private struct RecipeDiscoveryStack: View {
                     }
                 }
                 .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
-        }.buttonStyle(.plain)
+            .contentShape(.rect)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
             .accessibilityLabel(suggestion.recipe.title)
             .accessibilityHint("Opens the full recipe. Swipe right to keep or left to discard.")
             .accessibilityIdentifier(index == 0 ? "discoveryTopCard" : "discoveryBackCard")
+            .accessibilityAction { open(suggestion.id) }
             .accessibilityAction(named: "Keep recipe") { decide(suggestion, keeping: true) }
             .accessibilityAction(named: "Discard recipe") { decide(suggestion, keeping: false) }
             .simultaneousGesture(DragGesture(minimumDistance: 20)
@@ -327,7 +329,7 @@ private struct RecipeDiscoveryStack: View {
                     let committed = abs(value.translation.width) > 100 || (abs(value.translation.width) > 45 && abs(value.predictedEndTranslation.width) > 220)
                     if horizontal && committed { decide(suggestion, keeping: value.translation.width > 0) }
                     else { withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7)) { drag = .zero } }
-                })
+                }.exclusively(before: TapGesture().onEnded { open(suggestion.id) }))
     }
     private func decide(_ suggestion: RecipeSuggestion, keeping: Bool) {
         withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.8)) {
