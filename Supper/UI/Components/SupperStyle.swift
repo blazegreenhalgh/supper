@@ -59,3 +59,33 @@ extension View {
         } message: { Text(message.wrappedValue ?? "") }
     }
 }
+
+struct RecipeTransitionSource {
+    let id: String
+    let namespace: Namespace.ID
+}
+
+struct RecipeZoomSource: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let source: RecipeTransitionSource?
+    @ViewBuilder func body(content: Content) -> some View {
+        if let source, !reduceMotion {
+            content.matchedTransitionSource(id: source.id, in: source.namespace)
+        } else { content }
+    }
+}
+
+private struct RecipeZoomDestination: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let sourceID: String
+    let namespace: Namespace.ID
+    @ViewBuilder func body(content: Content) -> some View {
+        if reduceMotion { content }
+        else { content.navigationTransition(.zoom(sourceID: sourceID, in: namespace)) }
+    }
+}
+extension View {
+    func supperRecipeZoom(sourceID: String, in namespace: Namespace.ID) -> some View {
+        modifier(RecipeZoomDestination(sourceID: sourceID, namespace: namespace))
+    }
+}

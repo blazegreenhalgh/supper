@@ -9,6 +9,7 @@ struct SupperApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .tint(Color(uiColor: .systemBlue))
                 .environmentObject(store)
                 .task { await store.load() }
                 .onChange(of: scenePhase) { _, phase in

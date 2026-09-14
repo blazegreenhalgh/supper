@@ -64,7 +64,7 @@ struct RecipeFilterChips: View {
 private extension View {
     func filterChip(active: Bool, identifier: String) -> some View {
         supperGlassButton(prominent: active)
-            .tint(.blue)
+            .tint(Color(uiColor: .systemBlue))
             .accessibilityIdentifier(identifier)
             .accessibilityValue(active ? "Active" : "Not active")
             .accessibilityAddTraits(active ? .isSelected : [])

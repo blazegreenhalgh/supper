@@ -3,10 +3,12 @@ import SwiftUI
 struct RecipeDetailView: View {
     @EnvironmentObject private var store: RecipeStore
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let recipeID: UUID
     @State private var showingIngredients = false
     @State private var showingEditor = false
     @State private var showingCollections = false
+    @State private var showingTags = false
     @State private var selectedServings: Int?
     @State private var section = "Ingredients"
     @State private var byShoppingCategory = false
@@ -18,17 +20,20 @@ struct RecipeDetailView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         hero(recipe)
-                        VStack(alignment: .leading, spacing: 22) {
-                            Text(recipe.title).font(.largeTitle.bold()).fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
-                            if let duration = recipe.durationMinutes { Label("\(duration) min", systemImage: "clock").font(.subheadline).foregroundStyle(.secondary) }
-                            if !recipe.tags.isEmpty {
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 8) {
-                                        ForEach(recipe.tags, id: \.self) { tag in
-                                            Text(tag).font(.subheadline.weight(.medium)).padding(.horizontal, 12).padding(.vertical, 6).background(SupperStyle.subtle, in: .capsule)
-                                        }
+                        VStack(alignment: .leading, spacing: 26) {
+                            VStack(alignment: .leading, spacing: 14) {
+                                Text(recipe.title).font(.largeTitle.bold()).fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
+                                HStack(spacing: 20) {
+                                    if let duration = recipe.durationMinutes {
+                                        Label("\(duration) min", systemImage: "clock").foregroundStyle(.secondary)
                                     }
-                                }
+                                    Spacer(minLength: 0)
+                                    Button { showingTags = true } label: {
+                                        Label(recipe.tags.isEmpty ? "Add tags" : "Tags · \(recipe.tags.count)", systemImage: "tag")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .accessibilityIdentifier("recipeTags")
+                                }.font(.subheadline)
                             }
                             servings(recipe)
                             if !recipe.ingredients.isEmpty && !recipe.steps.isEmpty {
@@ -58,6 +63,7 @@ struct RecipeDetailView: View {
                     }
                 }
                 .background(SupperStyle.canvas)
+                .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: section)
                 .ignoresSafeArea(.container, edges: .top)
                 .navigationTitle("").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -73,6 +79,7 @@ struct RecipeDetailView: View {
                 .sheet(isPresented: $showingEditor) { AddRecipeView(recipe: recipe) }
                 .sheet(isPresented: $showingIngredients) { AddIngredientsToGroceryView(recipe: recipe, servings: selectedServings ?? recipe.servings) }
                 .sheet(isPresented: $showingCollections) { CollectionMembershipView(recipe: recipe) }
+                .sheet(isPresented: $showingTags) { RecipeTagsSheet(recipe: recipe).presentationDetents([.medium, .large]).presentationDragIndicator(.visible) }
                 .onAppear { if selectedServings == nil { selectedServings = recipe.servings } }
                 .onChange(of: recipe.servings) { _, value in selectedServings = value }
             } else { ContentUnavailableView("Recipe unavailable", systemImage: "fork.knife") }
@@ -118,13 +125,12 @@ struct RecipeDetailView: View {
             }
             ForEach(IngredientSection.sections(scaled, byShoppingCategory: byShoppingCategory)) { group in
                 VStack(alignment: .leading, spacing: 8) {
-                    if group.title != "Ingredients" { Text(group.title).font(.headline).accessibilityAddTraits(.isHeader) }
-                    LazyVStack(spacing: 0) {
+                    if group.title != "Ingredients" { Text(group.title).font(.subheadline.weight(.semibold)).textCase(.uppercase).padding(.top, 12).accessibilityAddTraits(.isHeader) }
+                    LazyVStack(spacing: 4) {
                         ForEach(group.ingredients) { ingredient in
-                            IngredientLabel(ingredient: ingredient).padding(.horizontal, 14).padding(.vertical, 5)
-                            if ingredient.id != group.ingredients.last?.id { Divider().padding(.leading, 51) }
+                            IngredientLabel(ingredient: ingredient)
                         }
-                    }.background(SupperStyle.surface, in: .rect(cornerRadius: 20))
+                    }
                 }
             }
         }
@@ -170,78 +176,42 @@ private struct RecipeMethodView: View {
     let steps: [RecipeStep]
     @State private var selectedStep = 0
     @State private var showingFullScreen = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var currentIndex: Int { min(selectedStep, max(steps.count - 1, 0)) }
+    @State private var showingAllSteps = true
 
     var body: some View {
         if !steps.isEmpty {
             VStack(alignment: .leading, spacing: 18) {
-                HStack {
-                    Text("Method")
-                        .font(.title2.bold())
-                        .accessibilityAddTraits(.isHeader)
-                    Spacer()
-                    Button("Full screen", systemImage: "arrow.up.left.and.arrow.down.right") { showingFullScreen = true }
-                        .font(.subheadline).accessibilityIdentifier("fullScreenMethod")
+                ViewThatFits(in: .horizontal) {
+                    HStack { heading; Spacer(minLength: 16); stepByStepButton }
+                    VStack(alignment: .leading, spacing: 12) { heading; stepByStepButton }
                 }
-
-                VStack(alignment: .leading, spacing: 18) {
-                    Text("Step \(currentIndex + 1) of \(steps.count)")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    ProgressView(value: Double(currentIndex + 1), total: Double(steps.count))
-                        .accessibilityLabel("Recipe step")
-                    Text(steps[currentIndex].text)
-                        .font(.body)
-                        .lineSpacing(3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
-                }
-                .padding(20)
-                .background(SupperStyle.surface, in: .rect(cornerRadius: 24))
-
-                SupperGlassGroup {
-                    HStack {
-                        Button("Previous", systemImage: "chevron.left") { moveStep(by: -1) }
-                            .supperGlassButton()
-                            .disabled(currentIndex == 0)
-                        Spacer(minLength: 12)
-                        Button("Next", systemImage: "chevron.right") { moveStep(by: 1) }
-                            .supperGlassButton(prominent: true)
-                            .disabled(currentIndex == steps.count - 1)
-                    }
-                    .controlSize(.large)
-                }
-
-                DisclosureGroup("All steps") {
-                    VStack(alignment: .leading, spacing: 20) {
+                DisclosureGroup("All steps", isExpanded: $showingAllSteps) {
+                    VStack(alignment: .leading, spacing: 24) {
                         ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Step \(index + 1)")
-                                    .font(.subheadline.weight(.semibold))
+                                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                                    .accessibilityAddTraits(.isHeader)
                                 Text(step.text)
-                                    .foregroundStyle(.secondary)
-                                    .lineSpacing(4)
+                                    .font(.callout).foregroundStyle(.primary)
+                                    .lineSpacing(4).fixedSize(horizontal: false, vertical: true)
                                     .textSelection(.enabled)
-                            }
+                            }.frame(maxWidth: .infinity, alignment: .leading)
                         }
-                    }
-                    .padding(.top, 12)
-                }
-                .tint(.primary)
+                    }.padding(.top, 16)
+                }.font(.subheadline)
             }
             .fullScreenCover(isPresented: $showingFullScreen) {
                 FullScreenMethodView(steps: steps, selectedStep: $selectedStep)
             }
         }
     }
-
-    private func moveStep(by offset: Int) {
-        withAnimation(reduceMotion ? nil : .snappy) {
-            selectedStep = min(max(currentIndex + offset, 0), steps.count - 1)
-        }
+    private var heading: some View {
+        Text("Method").font(.title2.bold()).accessibilityAddTraits(.isHeader)
+    }
+    private var stepByStepButton: some View {
+        Button("Step by step", systemImage: "arrow.up.left.and.arrow.down.right") { showingFullScreen = true }
+            .font(.subheadline).accessibilityIdentifier("fullScreenMethod")
     }
 }
 

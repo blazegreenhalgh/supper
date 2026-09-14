@@ -20,19 +20,6 @@ struct AddIngredientsToGroceryView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
-                    if let servings { Text("Quantities for \(servings) servings").font(.headline) }
-                    Label("\(selected.count) of \(recipe.ingredients.count) ingredients selected", systemImage: "basket")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Button(selected.count == recipe.ingredients.count ? "Deselect all" : "Select all") {
-                        selected = selected.count == recipe.ingredients.count ? [] : Set(recipe.ingredients.map(\.id))
-                    }
-                } header: {
-                    Text(recipe.title)
-                        .textCase(nil)
-                        .font(.title3.weight(.semibold))
-                }
                 ForEach(IngredientSection.sections(scaledIngredients)) { group in
                   Section(group.title) {
                     ForEach(group.ingredients) { ingredient in
@@ -48,12 +35,15 @@ struct AddIngredientsToGroceryView: View {
                             }.contentShape(.rect)
                         }
                         .buttonStyle(.plain)
-                        .listRowBackground(SupperStyle.surface)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .accessibilityIdentifier("groceryIngredient-" + ingredient.id.uuidString)
                         .accessibilityValue(selected.contains(ingredient.id) ? "Selected" : "Not selected")
                     }
                 }
                   }
             }
+            .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(SupperStyle.canvas)
             .navigationTitle("Add to Groceries")

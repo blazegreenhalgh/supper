@@ -61,7 +61,7 @@ struct AddRecipeView: View {
                         editorLink("Method", systemImage: "list.number", detail: draft.steps.isEmpty ? "Add" : "\(draft.steps.count) steps")
                     }.accessibilityIdentifier("editMethod")
                 }
-                Section("Details") {
+                Section("Time & servings") {
                     LabeledContent("Duration") {
                         HStack(spacing: 4) {
                             TextField("Optional", value: $draft.durationMinutes, format: .number)
@@ -73,6 +73,8 @@ struct AddRecipeView: View {
                         TextField("Optional", value: $draft.servings, format: .number)
                             .keyboardType(.numberPad).multilineTextAlignment(.trailing).accessibilityLabel("Base servings")
                     }
+                }
+                Section("Details") {
                     NavigationLink {
                         RecipeTagsEditor(tagsText: $tagsText, draft: draft)
                     } label: { editorLink("Tags", systemImage: "tag", detail: parsedTags.isEmpty ? "Add" : "\(parsedTags.count)") }
