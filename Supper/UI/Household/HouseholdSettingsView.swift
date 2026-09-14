@@ -9,6 +9,12 @@ struct HouseholdSettingsView: View {
     @State private var error: String?
     @State private var presentation: SharePresentation?
     @State private var task: Task<Void, Never>?
+    @State private var libraryToRemove: HouseholdSummary?
+    @State private var showingRemovalConfirmation = false
+    @State private var copiedDiagnostics = false
+    private var isBusy: Bool {
+        store.shareProgress != nil || store.checkingCloudAccount || store.removingHouseholdID != nil || store.joiningHousehold
+    }
     private var uniqueMembers: [HouseholdMember] {
         store.members.filter { ReactionIdentity.canonical($0.id, members: store.members) == $0.id }.sorted { $0.name < $1.name }
     }
@@ -29,33 +35,102 @@ struct HouseholdSettingsView: View {
                 }
                 Section("Household sharing") {
                     if let progress = store.shareProgress { ProgressView(progress); Button("Cancel", role: .cancel) { task?.cancel() } }
-                    else { Button("Invite or manage sharing", systemImage: "person.2.badge.plus", action: prepareShare) }
+                    else { Button("Invite or manage sharing", systemImage: "person.2.badge.plus", action: prepareShare).disabled(isBusy) }
                     if store.joiningHousehold { ProgressView("Downloading invited household…") }
+                    if let message = store.sharingMessage { Text(message).font(.subheadline).foregroundStyle(.secondary) }
                     if let message = store.cloudMessage { Text(message).font(.subheadline).foregroundStyle(.secondary) }
-                    Button("Check iCloud") { task = Task { await store.checkCloudAccount() } }.disabled(store.shareProgress != nil)
+                    if store.checkingCloudAccount {
+                        ProgressView("Checking iCloud account…")
+                    } else if let message = store.cloudAccountMessage {
+                        Text(message).font(.subheadline).foregroundStyle(.secondary).accessibilityIdentifier("iCloud account result")
+                    }
+                    Button("Check iCloud", systemImage: "icloud") {
+                        task = Task { await store.checkCloudAccount() }
+                    }.disabled(isBusy)
+                    if let diagnostics = store.cloudDiagnostics {
+                        Button(copiedDiagnostics ? "Copied diagnostics" : "Copy iCloud diagnostics", systemImage: "doc.on.doc") {
+                            UIPasteboard.general.string = diagnostics
+                            copiedDiagnostics = true
+                        }
+                    }
                 }
                 Section {
                     ForEach(store.households) { household in
-                        Button {
-                            do { try store.selectHousehold(household.id); name = store.currentMemberName } catch { self.error = error.localizedDescription }
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(household.name)
-                                    Text(household.incoming ? "Shared with you" : "Your library").font(.caption).foregroundStyle(.secondary)
+                        HStack {
+                            Button {
+                                do { try store.selectHousehold(household.id); name = store.currentMemberName }
+                                catch { self.error = error.localizedDescription }
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text(household.name)
+                                        Text(household.incoming ? "Shared with you" : "Your library").font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    if household.id == store.activeHouseholdID { Image(systemName: "checkmark") }
+                                }.contentShape(Rectangle())
+                            }.buttonStyle(.plain)
+                            if store.removingHouseholdID == household.id {
+                                ProgressView().accessibilityLabel(household.incoming ? "Leaving library" : "Deleting library")
+                            } else {
+                                Menu {
+                                    Button(household.incoming ? "Leave library" : "Delete library", systemImage: household.incoming ? "rectangle.portrait.and.arrow.right" : "trash", role: .destructive) {
+                                        confirmRemoval(household)
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis.circle").padding(.vertical, 8)
                                 }
-                                Spacer()
-                                if household.id == store.activeHouseholdID { Image(systemName: "checkmark") }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("Library options for \(household.name)")
                             }
-                        }.disabled(store.shareProgress != nil)
+                        }
+                        .disabled(isBusy)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(household.incoming ? "Leave" : "Delete", systemImage: household.incoming ? "rectangle.portrait.and.arrow.right" : "trash", role: .destructive) {
+                                confirmRemoval(household)
+                            }.disabled(isBusy)
+                        }
                     }
-                } header: { Text("Libraries") } footer: { Text("Joining a household keeps your existing library. Choose a library here to switch between them.") }
+                } header: { Text("Libraries") } footer: {
+                    Text("Tap a library to switch. Use its menu or swipe left to delete a library you own or leave one shared with you.")
+                }
             }.navigationTitle("Household").navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { task?.cancel(); dismiss() } } }
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { task?.cancel(); dismiss() }.disabled(store.removingHouseholdID != nil) } }
+                .interactiveDismissDisabled(store.removingHouseholdID != nil)
+                .confirmationDialog(removalTitle, isPresented: $showingRemovalConfirmation, titleVisibility: .visible, presenting: libraryToRemove) { household in
+                    Button(household.incoming ? "Leave library" : "Delete library", role: .destructive) { remove(household) }
+                    Button("Cancel", role: .cancel) { libraryToRemove = nil }
+                } message: { household in
+                    Text(removalMessage(household))
+                }
                 .onAppear { name = store.currentMemberName }
                 .onDisappear { task?.cancel() }
                 .sheet(item: $presentation) { NativeCloudSharingView(presentation: $0, store: store) { error = $0; presentation = nil } }
                 .supperError($error, title: "Couldn't update household")
+        }
+    }
+    private var removalTitle: String {
+        guard let household = libraryToRemove else { return "Remove library?" }
+        return "\(household.incoming ? "Leave" : "Delete") “\(household.name)”?"
+    }
+    private func removalMessage(_ household: HouseholdSummary) -> String {
+        var message = household.incoming
+            ? "This removes the library from your account. Its owner and other members keep their recipes and groceries. You’ll need a new invitation to rejoin."
+            : "This permanently deletes this library and its recipes, collections and groceries from your iCloud account and everyone it’s shared with. This can’t be undone."
+        if store.households.count == 1 {
+            message += " A new empty library will be created so you can keep using Supper."
+        }
+        return message
+    }
+    private func confirmRemoval(_ household: HouseholdSummary) {
+        libraryToRemove = household
+        showingRemovalConfirmation = true
+    }
+    private func remove(_ household: HouseholdSummary) {
+        libraryToRemove = nil
+        Task {
+            do { try await store.removeHousehold(household.id); name = store.currentMemberName }
+            catch { self.error = CloudProblem.message(error) }
         }
     }
     private func prepareShare() {
@@ -91,11 +166,14 @@ private struct NativeCloudSharingView: UIViewControllerRepresentable {
         let onError: (String) -> Void
         init(presentation: SharePresentation, store: RecipeStore, onError: @escaping (String) -> Void) { self.presentation = presentation; self.store = store; self.onError = onError }
         func itemTitle(for csc: UICloudSharingController) -> String? { presentation.title }
-        func cloudSharingController(_ csc: UICloudSharingController, failedToSaveShareWithError error: Error) { onError(CloudProblem.message(error)) }
+        func cloudSharingController(_ csc: UICloudSharingController, failedToSaveShareWithError error: Error) {
+            store.reportSharingError(error)
+            onError(CloudProblem.message(error))
+        }
         func cloudSharingControllerDidSaveShare(_ csc: UICloudSharingController) {
             guard let share = csc.share else { return }
             Task { @MainActor in
-                do { try await store.persistShare(share, in: presentation.persistentStore) } catch { onError(CloudProblem.message(error)) }
+                do { try await store.persistShare(share, in: presentation.persistentStore) } catch { store.reportSharingError(error); onError(CloudProblem.message(error)) }
             }
         }
         func cloudSharingControllerDidStopSharing(_ csc: UICloudSharingController) { store.sharingStopped() }

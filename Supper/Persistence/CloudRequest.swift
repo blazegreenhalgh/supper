@@ -32,6 +32,9 @@ enum CloudProblem {
 
     static func message(_ error: Error) -> String {
         let errors = underlyingErrors(error as NSError)
+        if isMissingProductionSchema(error) {
+            return "Supper’s iCloud sharing setup is incomplete. The app’s CloudKit sharing schema needs to be deployed to production. Your recipes are kept; checking your iCloud account or reinstalling the app won’t fix this."
+        }
         let detail = errors.last(where: {
             $0.domain == CKErrorDomain && $0.code != CKError.Code.partialFailure.rawValue && $0.code != CKError.Code.batchRequestFailed.rawValue
         }) ?? errors.last ?? (error as NSError)
@@ -51,6 +54,14 @@ enum CloudProblem {
         default: advice = "iCloud could not complete the request."
         }
         return "\(advice)\n\(detail.localizedDescription) (CloudKit \(detail.code))"
+    }
+
+    static func isMissingProductionSchema(_ error: Error) -> Bool {
+        underlyingErrors(error as NSError).contains { detail in
+            let message = [detail.localizedDescription, detail.localizedFailureReason ?? ""].joined(separator: " ").lowercased()
+            return message.contains("production schema") &&
+                (message.contains("cannot create new type") || message.contains("cannot create new field"))
+        }
     }
 
     static func serverShare(from error: Error) -> CKShare? {

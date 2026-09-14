@@ -94,6 +94,34 @@ import XCTest
     private func capture(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
     }
+    func testLibraryDeletionRequiresConfirmationAndCloudCheckResponds() {
+        let app = launch()
+        app.buttons["Library options"].tap()
+        app.buttons["Household"].tap()
+        XCTAssertTrue(app.navigationBars["Household"].waitForExistence(timeout: 5))
+        app.buttons["Check iCloud"].tap()
+        XCTAssertTrue(app.staticTexts["iCloud account result"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["iCloud account result"].label.contains("disabled in this build"))
+        app.swipeUp()
+        let options = app.buttons["Library options for Our Supper"]
+        XCTAssertTrue(options.waitForExistence(timeout: 5))
+        options.tap(); app.buttons["Delete library"].tap()
+        XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout: 5))
+        app.buttons["Cancel"].tap()
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["recipe-test-chicken"].waitForExistence(timeout: 5))
+        app.buttons["Library options"].tap(); app.buttons["Household"].tap()
+        app.swipeUp()
+        options.tap(); app.buttons["Delete library"].tap()
+        app.buttons["Delete library"].tap()
+        expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: app.buttons["Done"])
+        waitForExpectations(timeout: 5)
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.staticTexts["No recipes yet"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["recipe-test-chicken"].exists)
+        capture(app, "Empty cookbook after confirmed library deletion")
+    }
+
     func testNativeBackAndInteractiveTransitionsPreserveSearch() {
         let app = launch()
         XCTAssertFalse(app.searchFields.firstMatch.exists)
