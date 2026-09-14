@@ -1,3 +1,5 @@
+New: describe what you’re craving to find recipes online or create them with Apple Intelligence. Tap the stack to preview/edit, swipe right to keep or left to discard, undo a discard, and switch to grid view. Only kept recipes are saved to your household.
+
 Supper: smoother filters and clearer recipe editing
 
 • Edge-to-edge filter scrolling, equal-height clear and filter buttons, and smooth filter/results changes that respect Reduce Motion.

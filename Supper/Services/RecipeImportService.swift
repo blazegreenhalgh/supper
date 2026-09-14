@@ -1,7 +1,7 @@
 import Foundation
 
 struct RecipeImportService {
-    func importRecipe(from url: URL) async throws -> RecipeDraft {
+    func importRecipe(from url: URL, includeImage: Bool = true) async throws -> RecipeDraft {
         guard ["https", "http"].contains(url.scheme?.lowercased() ?? ""), url.host != nil else {
             throw SupperError.invalid("Enter a complete http or https recipe URL.")
         }
@@ -14,7 +14,7 @@ struct RecipeImportService {
               let html = String(data: data, encoding: .utf8) else { throw SupperError.invalid("The recipe page could not be loaded. Check the URL and try again.") }
         let parser = RecipeDocumentParser()
         var draft = try parser.parse(html: html, sourceURL: url)
-        if let imageURL = parser.imageURL(html: html), ["http", "https"].contains(imageURL.scheme ?? "") {
+        if includeImage, let imageURL = parser.imageURL(html: html), ["http", "https"].contains(imageURL.scheme ?? "") {
             var imageRequest = URLRequest(url: imageURL); imageRequest.timeoutInterval = 15
             if let (image, response) = try? await URLSession.shared.data(for: imageRequest),
                (response as? HTTPURLResponse)?.statusCode == 200, image.count <= 15_000_000 {
@@ -23,5 +23,19 @@ struct RecipeImportService {
         }
         try Task.checkCancellation()
         return draft
+    }
+
+    func image(from url: URL) async -> Data? {
+        guard !Task.isCancelled else { return nil }
+        var request = URLRequest(url: url); request.timeoutInterval = 12
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200, data.count < 8_000_000,
+              let html = String(data: data, encoding: .utf8),
+              let imageURL = RecipeDocumentParser().imageURL(html: html),
+              RecipeSearchFeed.publicURL(imageURL.absoluteString) != nil, !Task.isCancelled else { return nil }
+        var imageRequest = URLRequest(url: imageURL); imageRequest.timeoutInterval = 12
+        guard let (image, response) = try? await URLSession.shared.data(for: imageRequest),
+              (response as? HTTPURLResponse)?.statusCode == 200, image.count <= 15_000_000, !Task.isCancelled else { return nil }
+        return image
     }
 }

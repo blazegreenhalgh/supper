@@ -5,6 +5,7 @@ struct AddRecipeView: View {
     @EnvironmentObject private var store: RecipeStore
     @Environment(\.dismiss) private var dismiss
     private let original: Recipe?
+    private let onSaveDraft: ((Recipe) -> Void)?
     @State private var newID = UUID()
     @State private var draft: RecipeDraft
     @State private var photoItem: PhotosPickerItem?
@@ -16,8 +17,9 @@ struct AddRecipeView: View {
     @State private var task: Task<Void, Never>?
     @State private var householdID: UUID?
 
-    init(recipe: Recipe? = nil) {
+    init(recipe: Recipe? = nil, onSaveDraft: ((Recipe) -> Void)? = nil) {
         original = recipe
+        self.onSaveDraft = onSaveDraft
         _draft = State(initialValue: recipe.map(RecipeDraft.init(recipe:)) ?? RecipeDraft())
         _urlText = State(initialValue: recipe?.sourceURL?.absoluteString ?? "")
         _tagsText = State(initialValue: recipe?.tags.joined(separator: ", ") ?? "")
@@ -93,7 +95,7 @@ struct AddRecipeView: View {
             .navigationTitle(original == nil ? "New Recipe" : "Edit Recipe").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { task?.cancel(); dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+                ToolbarItem(placement: .confirmationAction) { Button(onSaveDraft == nil ? "Save" : "Done", action: save).disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
             }
             .onAppear { if householdID == nil { householdID = store.activeHouseholdID } }
             .onDisappear { task?.cancel() }
@@ -128,17 +130,22 @@ struct AddRecipeView: View {
     }
     private func save() {
         do {
-            guard householdID == store.activeHouseholdID else { throw SupperError.invalid("The active household changed. Switch back before saving this draft.") }
+            guard onSaveDraft != nil || householdID == store.activeHouseholdID else { throw SupperError.invalid("The active household changed. Switch back before saving this draft.") }
             let source = urlText.trimmingCharacters(in: .whitespacesAndNewlines)
             if !source.isEmpty {
                 guard let url = URL(string: source), ["http", "https"].contains(url.scheme ?? ""), url.host != nil else { throw SupperError.invalid("Use a complete http or https source URL, or leave it empty.") }
                 draft.sourceURL = url
             } else { draft.sourceURL = nil }
             draft.tags = parsedTags
+            guard draft.servings.map({ $0 > 0 }) ?? true, draft.durationMinutes.map({ $0 > 0 }) ?? true else {
+                throw SupperError.invalid("Servings and duration must be positive, or leave them empty.")
+            }
             guard draft.ingredients.allSatisfy({ !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }), draft.steps.allSatisfy({ !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
                 throw SupperError.invalid("Fill in or remove any blank ingredient rows and method steps before saving.")
             }
-            if let original {
+            if let onSaveDraft, let original {
+                onSaveDraft(draft.applying(to: original))
+            } else if let original {
                 guard let latest = store.recipes.first(where: { $0.id == original.id }) else { throw SupperError.invalid("The original recipe is unavailable. Your draft is still here.") }
                 try store.updateRecipe(draft.applying(to: latest))
             } else { var recipe = draft.makeRecipe(); recipe.id = newID; try store.addRecipe(recipe) }

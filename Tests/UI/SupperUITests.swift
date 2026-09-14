@@ -1,6 +1,65 @@
 import XCTest
 
 @MainActor final class SupperUITests: XCTestCase {
+    func testDiscoveryEditsStayDraftUntilKeptAndGridSharesDecisions() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--discovery-ui-testing", "-discoveryGridView", "NO"]
+        app.launch()
+        XCTAssertTrue(app.buttons["openRecipeDiscovery"].waitForExistence(timeout: 15))
+        app.buttons["openRecipeDiscovery"].tap()
+        app.buttons["A cosy one-pot dinner"].tap()
+        app.buttons["findDiscoveryRecipes"].tap()
+        let card = app.buttons["discoveryTopCard"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        capture(app, "Discovery recipe stack")
+        card.tap()
+        app.buttons["editRecipe"].tap()
+        let name = app.textFields["Recipe name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText(" edited")
+        app.buttons["Done"].firstMatch.tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Lemon chicken bowls edited"].exists)
+        app.buttons["closeDiscovery"].tap()
+        XCTAssertFalse(app.staticTexts["Lemon chicken bowls edited"].exists)
+        app.buttons["openRecipeDiscovery"].tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        app.swipeUp()
+        app.buttons["keepDiscoveryRecipe"].tap()
+        XCTAssertTrue(app.staticTexts["Creamy mushroom pasta"].waitForExistence(timeout: 5))
+        app.buttons["discoveryLayout"].tap()
+        XCTAssertTrue(app.buttons["Discard Creamy mushroom pasta"].waitForExistence(timeout: 5))
+        app.buttons["Discard Creamy mushroom pasta"].tap()
+        XCTAssertFalse(app.staticTexts["Creamy mushroom pasta"].exists)
+        app.buttons["discoveryLayout"].tap()
+        app.buttons["undoDiscoveryDiscard"].tap()
+        XCTAssertTrue(app.staticTexts["Creamy mushroom pasta"].waitForExistence(timeout: 5))
+        app.buttons["closeDiscovery"].tap()
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["Lemon chicken bowls edited"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Creamy mushroom pasta"].exists)
+    }
+
+    func testDiscoverySwipeDiscardsAndKeeps() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--discovery-ui-testing", "-discoveryGridView", "NO"]
+        app.launch()
+        XCTAssertTrue(app.buttons["openRecipeDiscovery"].waitForExistence(timeout: 15))
+        app.buttons["openRecipeDiscovery"].tap()
+        app.buttons["A cosy one-pot dinner"].tap()
+        app.buttons["findDiscoveryRecipes"].tap()
+        let card = app.buttons["discoveryTopCard"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        card.swipeLeft()
+        XCTAssertTrue(app.staticTexts["Creamy mushroom pasta"].waitForExistence(timeout: 5))
+        card.swipeRight()
+        XCTAssertTrue(app.staticTexts["Crispy chickpea wraps"].waitForExistence(timeout: 5))
+        app.buttons["closeDiscovery"].tap()
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["Creamy mushroom pasta"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Lemon chicken bowls"].exists)
+    }
+
     private func launch() -> XCUIApplication {
         let app = XCUIApplication(); app.launchArguments = ["--ui-testing"]; app.launch()
         XCTAssertTrue(app.buttons["recipe-test-chicken"].waitForExistence(timeout: 15))

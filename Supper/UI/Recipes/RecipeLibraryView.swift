@@ -12,12 +12,20 @@ struct RecipeLibraryView: View {
     @State private var showingHousehold = false
     @State private var showingPicker = false
     @State private var showingSearchAssistant = false
+    @State private var showingDiscovery = false
+    @StateObject private var discovery = RecipeDiscoveryModel()
     private var columns: [GridItem] { Array(repeating: GridItem(.flexible(minimum: 0), spacing: 16, alignment: .top), count: dynamicTypeSize.isAccessibilitySize ? 1 : 2) }
     private var filteredRecipes: [Recipe] { store.recipes.filter { filter.matches($0, collections: store.collections, memberID: store.currentMemberID, members: store.members) } }
     private var allTags: [String] { Array(Set(store.recipes.flatMap(\.tags))).sorted() }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
+                if !isSearch {
+                    Button { showingDiscovery = true } label: {
+                        Label("What are you craving?", systemImage: "sparkles").frame(maxWidth: .infinity)
+                    }.supperGlassButton().controlSize(.large).padding(.horizontal, 20)
+                        .accessibilityIdentifier("openRecipeDiscovery")
+                }
                 RecipeFilterChips(filter: $filter)
                 HStack {
                     Text("\(filteredRecipes.count) recipes").font(.subheadline).foregroundStyle(.secondary)
@@ -71,6 +79,10 @@ struct RecipeLibraryView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Menu("Library options", systemImage: "ellipsis") {
+                    Button("Find new recipes", systemImage: "sparkles") {
+                        if isSearch && !discovery.hasResults { discovery.prompt = filter.query }
+                        showingDiscovery = true
+                    }
                     Button("Pick something", systemImage: "dice") { showingPicker = true }
                     if !isSearch { Button("Household", systemImage: "person.2") { showingHousehold = true } }
                 }
@@ -84,6 +96,7 @@ struct RecipeLibraryView: View {
             }
         }
         .sheet(isPresented: $showingAddRecipe) { AddRecipeView() }
+        .sheet(isPresented: $showingDiscovery) { RecipeDiscoveryView(model: discovery) }
         .sheet(isPresented: $showingCollections) { CollectionsView() }
         .sheet(isPresented: $showingHousehold) { HouseholdSettingsView() }
         .sheet(isPresented: $showingPicker) { PickRecipeView(recipes: filteredRecipes) { id in showingPicker = false; openRecipe(id) } }
