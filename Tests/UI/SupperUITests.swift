@@ -1,6 +1,26 @@
 import XCTest
 
 @MainActor final class SupperUITests: XCTestCase {
+    func testRecipeChatKeepsInputWhenReopenedAndCancelDoesNotSave() {
+        let app = launch(); openRecipe(app)
+        app.buttons["editRecipe"].tap()
+        XCTAssertTrue(app.buttons["askRecipeAI"].waitForExistence(timeout: 5))
+        app.buttons["askRecipeAI"].tap()
+        let field = app.textFields["recipeChatInput"]
+        let input = field.exists ? field : app.textViews["recipeChatInput"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        input.tap(); input.typeText("Add ingredients and a method for naan bread")
+        capture(app, "Recipe assistant with native composer")
+        app.buttons["closeRecipeChat"].tap()
+        app.buttons["askRecipeAI"].tap()
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        XCTAssertEqual(input.value as? String, "Add ingredients and a method for naan bread")
+        app.buttons["closeRecipeChat"].tap()
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.buttons["editRecipe"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Naan bread"].exists)
+    }
+
     func testDiscoveryEditsStayDraftUntilKeptAndGridSharesDecisions() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "--discovery-ui-testing"]

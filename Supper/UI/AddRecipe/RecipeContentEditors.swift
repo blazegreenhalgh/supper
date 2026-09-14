@@ -128,7 +128,7 @@ struct MethodListEditor: View {
                     Button { editing = step } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 6) {
-                                Text("Step \(index + 1)").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                                Text(step.group.isEmpty ? "Step \(index + 1)" : "\(step.group) · Step \(index + 1)").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
                                 Text(step.text).font(.body).foregroundStyle(.primary).lineLimit(3)
                             }
                             Spacer(minLength: 12)
@@ -160,6 +160,10 @@ private struct MethodStepEditor: View {
         NavigationStack {
             Form {
                 Section("Instructions") { TextField("What happens in this step?", text: $step.text, axis: .vertical).lineLimit(8...30) }
+                Section("Recipe section · optional") {
+                    TextField("e.g. Naan bread or Pizza toppings", text: $step.group)
+                        .accessibilityIdentifier("methodStepGroup")
+                }
             }
             .navigationTitle(isNew ? "Add Step" : "Edit Step").navigationBarTitleDisplayMode(.inline)
             .toolbar {

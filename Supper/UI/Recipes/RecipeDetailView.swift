@@ -217,6 +217,9 @@ private struct RecipeMethodView: View {
                     VStack(alignment: .leading, spacing: 24) {
                         ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
                             VStack(alignment: .leading, spacing: 8) {
+                                if !step.group.isEmpty, index == 0 || steps[index - 1].group != step.group {
+                                    Text(step.group).font(.headline).accessibilityAddTraits(.isHeader)
+                                }
                                 Text("Step \(index + 1)")
                                     .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                                     .accessibilityAddTraits(.isHeader)
@@ -269,6 +272,9 @@ private struct FullScreenMethodView: View {
                         Color.clear.frame(height: 0).id("stepTop")
                         ProgressView(value: Double(currentIndex + 1), total: Double(steps.count))
                             .accessibilityLabel("Recipe step")
+                        if !steps[currentIndex].group.isEmpty {
+                            Text(steps[currentIndex].group).font(.headline).foregroundStyle(.secondary)
+                        }
                         Text(steps[currentIndex].text)
                             .font(.title2).lineSpacing(6)
                             .frame(maxWidth: .infinity, alignment: .leading)

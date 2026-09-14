@@ -13,6 +13,8 @@ struct AddRecipeView: View {
     @State private var tagsText: String
     @State private var showingURLImport = false
     @State private var showingAssistant = false
+    @State private var showingRecipeChat = false
+    @StateObject private var recipeChat = RecipeChatSession()
     @State private var errorMessage: String?
     @State private var task: Task<Void, Never>?
     @State private var householdID: UUID?
@@ -39,8 +41,11 @@ struct AddRecipeView: View {
                         }
                     }.buttonStyle(.plain)
                     TextField("Recipe name", text: $draft.title).font(.title3.weight(.semibold))
+                    Button("Ask AI", systemImage: "sparkles") { showingRecipeChat = true }
+                        .font(.subheadline).foregroundStyle(.primary)
+                        .accessibilityIdentifier("askRecipeAI")
                     if draft.imageData != nil { Button("Remove photo", role: .destructive) { draft.imageData = nil }.font(.subheadline) }
-                } footer: { Text("Start with a photo and title. Everything else is optional.") }
+                } footer: { Text("Start with just a title. Add everything else when you’re ready.") }
                 if original == nil {
                     Section("Import a recipe") {
                         Button { showingURLImport = true } label: {
@@ -112,8 +117,18 @@ struct AddRecipeView: View {
             }
             .sheet(isPresented: $showingURLImport) { URLImportView(onImported: imported) }
             .sheet(isPresented: $showingAssistant) { RecipeAssistanceView(onImported: imported) }
+            .sheet(isPresented: $showingRecipeChat) { RecipeEditorChatView(draft: assistantDraft, session: recipeChat) }
             .supperError($errorMessage, title: "Couldn't save changes")
         }
+    }
+    private var assistantDraft: Binding<RecipeDraft> {
+        Binding(get: {
+            var value = draft
+            value.tags = parsedTags
+            let source = urlText.trimmingCharacters(in: .whitespacesAndNewlines)
+            value.sourceURL = source.isEmpty ? nil : URL(string: source)
+            return value
+        }, set: { draft = $0 })
     }
     private var parsedTags: [String] {
         var seen = Set<String>()

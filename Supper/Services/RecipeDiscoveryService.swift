@@ -84,7 +84,7 @@ struct RecipeDiscoveryService {
         return RecipeDiscoveryResult(suggestions: suggestions, notice: Self.canUseAI ? nil : "Apple Intelligence is unavailable. These are online keyword matches; review them against your request.")
     }
 
-    private func search(_ query: String) async throws -> [URL] {
+    func search(_ query: String) async throws -> [URL] {
         // Search real publishers' public WordPress indexes, without a paid search key or fragile SERP scraping.
         let publishers = ["www.recipetineats.com", "www.budgetbytes.com", "www.skinnytaste.com"]
         let results = await withTaskGroup(of: (Int, [URL]?).self, returning: [(Int, [URL])].self) { group in
