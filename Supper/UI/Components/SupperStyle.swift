@@ -12,12 +12,12 @@ extension View {
     func supperGlassButton(prominent: Bool = false) -> some View {
         if #available(iOS 26.0, *) {
             if prominent {
-                self.buttonStyle(.glassProminent)
+                self.buttonStyle(.glassProminent).tint(Color(uiColor: .systemBlue))
             } else {
                 self.buttonStyle(.glass)
             }
         } else if prominent {
-            self.buttonStyle(.borderedProminent)
+            self.buttonStyle(.borderedProminent).tint(Color(uiColor: .systemBlue))
         } else {
             self.buttonStyle(.bordered)
         }

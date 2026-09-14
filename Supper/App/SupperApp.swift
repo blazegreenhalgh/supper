@@ -9,7 +9,7 @@ struct SupperApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
-                .tint(Color(uiColor: .systemBlue))
+                .tint(.primary)
                 .preferredColorScheme(uiTestColorScheme)
                 .environmentObject(store)
                 .task { await store.load() }

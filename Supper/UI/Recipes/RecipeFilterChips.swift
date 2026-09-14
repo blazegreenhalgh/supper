@@ -12,6 +12,7 @@ struct RecipeFilterChips: View {
                     Image(systemName: "xmark").frame(width: labelHeight, height: labelHeight)
                 }
                 .supperGlassButton()
+                .foregroundStyle(.primary)
                 .accessibilityLabel("Clear filters")
                 .accessibilityIdentifier("clearFilters")
                 .padding(.leading, 20).padding(.trailing, 8)
@@ -64,7 +65,8 @@ struct RecipeFilterChips: View {
 private extension View {
     func filterChip(active: Bool, identifier: String) -> some View {
         supperGlassButton(prominent: active)
-            .tint(Color(uiColor: .systemBlue))
+            .tint(active ? Color(uiColor: .systemBlue) : Color.primary)
+            .foregroundStyle(active ? Color.white : Color.primary)
             .accessibilityIdentifier(identifier)
             .accessibilityValue(active ? "Active" : "Not active")
             .accessibilityAddTraits(active ? .isSelected : [])

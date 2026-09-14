@@ -6,7 +6,6 @@ struct GroceryListView: View {
     @State private var showingRecipes = true
     @FocusState private var isAddingItem: Bool
 
-    private var unchecked: [GroceryItem] { store.groceryItems.filter { !$0.isChecked } }
     private var checked: [GroceryItem] { store.groceryItems.filter(\.isChecked) }
     private var canAddItem: Bool { !newItem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     private var shoppingRecipes: [Recipe] {
@@ -19,51 +18,61 @@ struct GroceryListView: View {
             if !shoppingRecipes.isEmpty {
                 Section {
                     DisclosureGroup(isExpanded: $showingRecipes) {
-                        ForEach(shoppingRecipes) { recipe in
-                            NavigationLink {
-                                RecipeDetailView(recipeID: recipe.id)
-                            } label: {
-                                shoppingRecipeLabel(recipe)
+                        VStack(spacing: 12) {
+                            ForEach(shoppingRecipes) { recipe in
+                                NavigationLink {
+                                    RecipeDetailView(recipeID: recipe.id)
+                                } label: {
+                                    shoppingRecipeLabel(recipe)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .contentShape(.rect)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .listRowBackground(SupperStyle.surface)
                         }
+                        .padding(.top, 12)
+                        .padding(.bottom, 4)
                     } label: {
                         HStack {
                             Text("Shopping for").font(.headline)
+                            Spacer()
                             Text("\(shoppingRecipes.count)")
-                                .font(.subheadline.weight(.semibold))
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
+                        .padding(.vertical, 8)
                     }
                     .tint(.primary)
-                    .listRowBackground(SupperStyle.subtle)
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 12, trailing: 20))
                 }
+                .listSectionSeparator(.hidden)
             }
 
             ForEach(GroceryAisle.allCases, id: \.self) { aisle in
-                let items = unchecked.filter { $0.category == aisle }
+                // Keep the stored order within each aisle, including checked items.
+                let items = store.groceryItems.filter { $0.category == aisle }
                 if !items.isEmpty {
-                    Section(aisle.rawValue) {
+                    Section {
                         ForEach(items) { item in
                             GroceryRow(item: item)
-                                .listRowBackground(SupperStyle.surface)
+                                .listRowBackground(Color.clear)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 20))
                         }
                         .onDelete { delete($0, from: items) }
+                    } header: {
+                        Text(aisle.rawValue)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .textCase(.uppercase)
                     }
-                }
-            }
-
-            if !checked.isEmpty {
-                Section("In basket · \(checked.count)") {
-                    ForEach(checked) { item in
-                        GroceryRow(item: item)
-                            .listRowBackground(SupperStyle.surface)
-                    }
-                    .onDelete { delete($0, from: checked) }
+                    .listSectionSeparator(.hidden)
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(SupperStyle.canvas)
         .scrollDismissesKeyboard(.interactively)
@@ -175,30 +184,19 @@ private struct GroceryRow: View {
             do { try store.toggleGroceryItem(item) }
             catch { store.errorMessage = error.localizedDescription }
         } label: {
-            HStack(spacing: 20) {
-                IngredientIcon(name: item.name)
-                    .opacity(item.isChecked ? 0.5 : 1)
-                VStack(alignment: .leading, spacing: 4) {
-                    let amount = [item.quantity, item.unit].filter { !$0.isEmpty }.joined(separator: " ")
-                    Text("\(Text(amount).bold())\(amount.isEmpty ? "" : " ")\(item.name)")
-                        .font(.callout).lineSpacing(3)
-                        .strikethrough(item.isChecked)
-                        .foregroundStyle(item.isChecked ? .secondary : .primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if !recipeNames.isEmpty {
-                        Text(recipeNames)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                }
-                Spacer(minLength: 4)
+            HStack(spacing: 12) {
+                IngredientLineItem(
+                    name: item.name,
+                    amount: [item.quantity, item.unit].filter { !$0.isEmpty }.joined(separator: " "),
+                    detail: recipeNames,
+                    isChecked: item.isChecked
+                )
                 Image(systemName: item.isChecked ? "checkmark.circle.fill" : "circle")
-                    .font(.title2)
-                    .foregroundStyle(item.isChecked ? Color.accentColor : Color.secondary)
+                    .font(.title3)
+                    .foregroundStyle(item.isChecked ? Color.primary : Color.secondary)
                     .accessibilityHidden(true)
             }
-            .padding(.vertical, 6)
+            .frame(minHeight: 44)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
