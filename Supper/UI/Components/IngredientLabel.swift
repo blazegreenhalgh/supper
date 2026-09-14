@@ -12,23 +12,46 @@ struct IngredientIcon: View {
 }
 struct IngredientLabel: View {
     let ingredient: Ingredient
+
+    var body: some View {
+        IngredientLineItem(name: ingredient.name, amount: ingredient.amount)
+    }
+}
+
+/// Shared typography and spacing for recipe ingredients and the grocery list.
+struct IngredientLineItem: View {
+    let name: String
+    let amount: String
+    var detail: String = ""
+    var isChecked = false
+
     var body: some View {
         HStack(alignment: .center, spacing: 20) {
-            IngredientIcon(name: ingredient.name)
-            ingredientText
-                .font(.callout)
-                .foregroundStyle(.primary)
-                .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            IngredientIcon(name: name)
+                .opacity(isChecked ? 0.5 : 1)
+            VStack(alignment: .leading, spacing: 4) {
+                ingredientText
+                    .font(.callout)
+                    .foregroundStyle(isChecked ? .secondary : .primary)
+                    .strikethrough(isChecked)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !detail.isEmpty {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
     }
     private var ingredientText: Text {
-        if ingredient.amount.isEmpty { return Text(ingredient.name) }
+        if amount.isEmpty { return Text(name) }
         // One text flow keeps amounts attached to names at every Dynamic Type size.
-        return Text("\(Text(ingredient.amount).bold()) \(ingredient.name)")
+        return Text("\(Text(amount).bold()) \(name)")
     }
 }
