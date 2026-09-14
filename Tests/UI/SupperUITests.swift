@@ -63,6 +63,15 @@ import XCTest
         app.buttons["findDiscoveryRecipes"].tap()
         let card = app.buttons["discoveryTopCard"]
         XCTAssertTrue(card.waitForExistence(timeout: 5))
+        let restingFrame = card.frame
+        let start = card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        // A small diagonal drag should settle back without opening or deciding a recipe.
+        start.press(forDuration: 0.1, thenDragTo: start.withOffset(CGVector(dx: 35, dy: 8)), withVelocity: .slow, thenHoldForDuration: 0.3)
+        expectDiscoveryCard(app, title: "Lemon chicken bowls")
+        let settled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            abs(card.frame.midX - restingFrame.midX) < 2
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 5), .completed)
         card.swipeLeft()
         expectDiscoveryCard(app, title: "Creamy mushroom pasta")
         card.swipeRight()
