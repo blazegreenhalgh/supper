@@ -17,3 +17,10 @@ jobs:
         run: swift test
       - name: Build iOS simulator app
         run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build
+      - name: Native navigation and editor UI regression tests
+        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath DerivedData -resultBundlePath UIResults CODE_SIGNING_ALLOWED=NO test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-test-results
+          path: UIResults.xcresult

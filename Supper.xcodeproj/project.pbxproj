@@ -39,6 +39,7 @@
 		D6146A8527F6758A01BD5A76 /* CollectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27F605738E18021FC378F701 /* CollectionsView.swift */; };
 		1AC275DAAFE5CE3EA7B63B24 /* HouseholdSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30B6A9D1535D088D2DB8A3A /* HouseholdSettingsView.swift */; };
 		562AE1C5D8E80F67996EE0E4 /* RecipeAssistanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13B27DAFBFCDC5F5BB6DCFBC /* RecipeAssistanceView.swift */; };
+		DD0000000000000000000004 = {isa = PBXBuildFile; fileRef = DD0000000000000000000003; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -78,19 +79,23 @@
 		27F605738E18021FC378F701 /* CollectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/UI/Recipes/CollectionsView.swift"; sourceTree = SOURCE_ROOT; };
 		E30B6A9D1535D088D2DB8A3A /* HouseholdSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/UI/Household/HouseholdSettingsView.swift"; sourceTree = SOURCE_ROOT; };
 		13B27DAFBFCDC5F5BB6DCFBC /* RecipeAssistanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/UI/AddRecipe/RecipeAssistanceView.swift"; sourceTree = SOURCE_ROOT; };
+		DD0000000000000000000003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/UI/SupperUITests.swift; sourceTree = SOURCE_ROOT; };
+		DD0000000000000000000002 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = SupperUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		29B2D46AA747A59804D46E1F /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		DD0000000000000000000006 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		5928955287B8089ED2177128 = {isa = PBXGroup; children = (
+			DD0000000000000000000003,
 			BD13AA3ACFF3D0C2ED6E4720,
 			E98CA76C287370E0E9D02D75,
 			BF7A2D27A78D590BDEF15AF2,
 		); sourceTree = "<group>"; };
-		BF7A2D27A78D590BDEF15AF2 /* Products */ = {isa = PBXGroup; children = (A97C29AD63741CF438998CE6 /* Supper - Shared Cookbook.app */,); name = Products; sourceTree = "<group>"; };
+		BF7A2D27A78D590BDEF15AF2 /* Products */ = {isa = PBXGroup; children = (DD0000000000000000000002,A97C29AD63741CF438998CE6 /* Supper - Shared Cookbook.app */,); name = Products; sourceTree = "<group>"; };
 		BD13AA3ACFF3D0C2ED6E4720 /* Config */ = {isa = PBXGroup; children = (188BDC112B00A615FE505EDD /* App.xcconfig */,); path = Config; sourceTree = "<group>"; };
 		E98CA76C287370E0E9D02D75 /* Supper */ = {isa = PBXGroup; children = (
 			13B27DAFBFCDC5F5BB6DCFBC /* RecipeAssistanceView.swift */,
@@ -157,12 +162,19 @@
 		); path = AddRecipe; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
+/* Begin PBXContainerItemProxy section */
+		DD000000000000000000000B = {isa = PBXContainerItemProxy; containerPortal = 46F86FAA6BBF9AC94A7E4595; proxyType = 1; remoteGlobalIDString = 42AEFBAE01D2DFD981F7DA7D; remoteInfo = Supper; };
+/* End PBXContainerItemProxy section */
+/* Begin PBXTargetDependency section */
+		DD000000000000000000000C = {isa = PBXTargetDependency; target = 42AEFBAE01D2DFD981F7DA7D; targetProxy = DD000000000000000000000B; };
+/* End PBXTargetDependency section */
 /* Begin PBXNativeTarget section */
 		42AEFBAE01D2DFD981F7DA7D /* Supper */ = {isa = PBXNativeTarget; buildConfigurationList = F707ED8CFBC457F7F618ECA6; buildPhases = (E7209FB05162B7572F88D05E, 29B2D46AA747A59804D46E1F, 66F8606E9F0A136E2228EBCB); buildRules = (); dependencies = (); name = Supper; productName = Supper; productReference = A97C29AD63741CF438998CE6 /* Supper - Shared Cookbook.app */; productType = "com.apple.product-type.application"; };
+		DD0000000000000000000001 /* SupperUITests */ = {isa = PBXNativeTarget; buildConfigurationList = DD0000000000000000000008; buildPhases = (DD0000000000000000000005, DD0000000000000000000006, DD0000000000000000000007); buildRules = (); dependencies = (DD000000000000000000000C); name = SupperUITests; productName = SupperUITests; productReference = DD0000000000000000000002; productType = "com.apple.product-type.bundle.ui-testing"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		46F86FAA6BBF9AC94A7E4595 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 2700; LastUpgradeCheck = 2700; TargetAttributes = {42AEFBAE01D2DFD981F7DA7D = {CreatedOnToolsVersion = 27.0; }; }; }; buildConfigurationList = CB7CBE0C3B42E7D081FECC31; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = 5928955287B8089ED2177128; productRefGroup = BF7A2D27A78D590BDEF15AF2; projectDirPath = ""; projectRoot = ""; targets = (42AEFBAE01D2DFD981F7DA7D); };
+		46F86FAA6BBF9AC94A7E4595 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 2700; LastUpgradeCheck = 2700; TargetAttributes = {42AEFBAE01D2DFD981F7DA7D = {CreatedOnToolsVersion = 27.0; }; }; }; buildConfigurationList = CB7CBE0C3B42E7D081FECC31; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = 5928955287B8089ED2177128; productRefGroup = BF7A2D27A78D590BDEF15AF2; projectDirPath = ""; projectRoot = ""; targets = (42AEFBAE01D2DFD981F7DA7D, DD0000000000000000000001); };
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
@@ -170,6 +182,7 @@
 			7E463C510F4F1EA4B56E56E9 /* Assets.xcassets in Resources */,
 			C4524DD3A6F6CC29195C305F /* PrivacyInfo.xcprivacy in Resources */,
 		); runOnlyForDeploymentPostprocessing = 0; };
+		DD0000000000000000000007 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -206,6 +219,7 @@
 			5C2B035512A99C42543FFDFE /* RecipeLibraryView.swift in Sources */,
 			9ED0857FB67E54C180DB578E /* RootView.swift in Sources */,
 		); runOnlyForDeploymentPostprocessing = 0; };
+		DD0000000000000000000005 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (DD0000000000000000000004); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -213,11 +227,14 @@
 		7BF40F069D95C38DE60AA602 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; ENABLE_STRICT_OBJC_MSGSEND = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 18.0; SWIFT_VERSION = 5.0; GCC_C_LANGUAGE_STANDARD = gnu17; ENABLE_USER_SCRIPT_SANDBOXING = YES; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; SWIFT_OPTIMIZATION_LEVEL = "-O"; ENABLE_TESTABILITY = NO; }; name = Release; };
 		3E4BDE2A330E14EAA31A5A18 /* Debug */ = {isa = XCBuildConfiguration; baseConfigurationReference = 188BDC112B00A615FE505EDD; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor; CODE_SIGN_ENTITLEMENTS = Supper/Supper.entitlements; CURRENT_PROJECT_VERSION = 1; ENABLE_PREVIEWS = YES; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = Supper; INFOPLIST_KEY_CloudKitContainerIdentifier = "$(CLOUDKIT_CONTAINER_IDENTIFIER)"; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.food-and-drink"; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; MARKETING_VERSION = 0.1.0; PRODUCT_NAME = "Supper - Shared Cookbook"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_EMIT_LOC_STRINGS = YES; TARGETED_DEVICE_FAMILY = "1,2";}; name = Debug; };
 		FBE5CC35BA76CB71C31E843C /* Release */ = {isa = XCBuildConfiguration; baseConfigurationReference = 188BDC112B00A615FE505EDD; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor; CODE_SIGN_ENTITLEMENTS = Supper/Supper.entitlements; CURRENT_PROJECT_VERSION = 1; ENABLE_PREVIEWS = YES; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = Supper; INFOPLIST_KEY_CloudKitContainerIdentifier = "$(CLOUDKIT_CONTAINER_IDENTIFIER)"; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.food-and-drink"; INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; MARKETING_VERSION = 0.1.0; PRODUCT_NAME = "Supper - Shared Cookbook"; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_EMIT_LOC_STRINGS = YES; TARGETED_DEVICE_FAMILY = "1,2";}; name = Release; };
+		DD0000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 18.0; PRODUCT_BUNDLE_IDENTIFIER = com.blazegreenhalgh.Supper.UITests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = Supper;}; name = Debug; };
+		DD000000000000000000000A = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 18.0; PRODUCT_BUNDLE_IDENTIFIER = com.blazegreenhalgh.Supper.UITests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = Supper;}; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
 		CB7CBE0C3B42E7D081FECC31 /* Build configuration list for PBXProject */ = {isa = XCConfigurationList; buildConfigurations = (EC86DC4F4B4C60C3EC031655, 7BF40F069D95C38DE60AA602); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		F707ED8CFBC457F7F618ECA6 /* Build configuration list for PBXNativeTarget */ = {isa = XCConfigurationList; buildConfigurations = (3E4BDE2A330E14EAA31A5A18, FBE5CC35BA76CB71C31E843C); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		DD0000000000000000000008 = {isa = XCConfigurationList; buildConfigurations = (DD0000000000000000000009, DD000000000000000000000A); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = 46F86FAA6BBF9AC94A7E4595 /* Project object */;

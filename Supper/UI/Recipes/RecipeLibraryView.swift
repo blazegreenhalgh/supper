@@ -74,6 +74,7 @@ struct RecipeLibraryView: View {
     }
     private func recipeLink(_ recipe: Recipe) -> some View {
         NavigationLink(value: recipe.id) { RecipeCardView(recipe: recipe) }.buttonStyle(.plain)
+            .accessibilityIdentifier(recipe.title == "Chicken with rice" ? "recipe-test-chicken" : "recipe-" + recipe.id.uuidString)
     }
     private var filters: some View {
         ScrollView(.horizontal, showsIndicators: false) {

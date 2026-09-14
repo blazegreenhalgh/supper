@@ -8,7 +8,16 @@ import CloudKit
 
 @MainActor
 final class RecipeStore: ObservableObject {
-    static let shared = RecipeStore()
+    static let shared: RecipeStore = {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-testing") {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent("SupperUITests-" + UUID().uuidString)
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            return RecipeStore(persistence: PersistenceStack(cloudEnabled: false, directory: directory))
+        }
+        #endif
+        return RecipeStore()
+    }()
     @Published private(set) var recipes: [Recipe] = []
     @Published private(set) var groceryItems: [GroceryItem] = []
     @Published private(set) var collections: [RecipeCollection] = []
@@ -48,6 +57,13 @@ final class RecipeStore: ObservableObject {
             try refresh()
             observeChanges()
             isReady = true
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--ui-testing"), recipes.isEmpty {
+                try addRecipe(Recipe(title: "Chicken with rice", durationMinutes: 25, servings: 4, tags: ["Easy"],
+                    ingredients: [Ingredient(name: "chicken breast", quantity: "500", unit: "g"), Ingredient(name: "cumin", quantity: "1", unit: "tsp", group: "Spice mix")],
+                    steps: [RecipeStep(text: "Cook the chicken and serve with rice.")]))
+            }
+            #endif
             if let first = queuedInvitations.first { pendingInvitation = first; queuedInvitations.removeAll() }
             await checkCloudAccount()
         } catch { errorMessage = "Couldn't open your library. Your data is kept. \(error.localizedDescription)" }
@@ -78,7 +94,7 @@ final class RecipeStore: ObservableObject {
         try validate(recipe)
         try mutate { context, root in
             if try fetchRecipeObject(recipe.id, context: context) != nil { return }
-            let object = RecipeMO(context: context); assign(object, root: root, context: context)
+            let object = RecipeMO(entity: NSEntityDescription.entity(forEntityName: "Recipe", in: context)!, insertInto: context); assign(object, root: root, context: context)
             object.library = root; apply(recipe, to: object, context: context, root: root)
         }
     }
@@ -114,7 +130,7 @@ final class RecipeStore: ObservableObject {
             for ingredient in ingredients {
                 let key = GroceryMerging.contributionKey(operationID: operationID, ingredientID: ingredient.id)
                 guard keys.insert(key).inserted else { continue }
-                let item = GroceryItemMO(context: context); assign(item, root: root, context: context)
+                let item = GroceryItemMO(entity: NSEntityDescription.entity(forEntityName: "GroceryItem", in: context)!, insertInto: context); assign(item, root: root, context: context)
                 item.id = UUID(); item.operationKey = key; item.name = ingredient.name
                 item.quantity = ingredient.quantity; item.unit = ingredient.unit
                 item.categoryOverride = ingredient.categoryOverride?.rawValue
@@ -127,7 +143,7 @@ final class RecipeStore: ObservableObject {
         let ingredient = IngredientLineParser.parse(name)
         guard !ingredient.name.isEmpty else { return }
         try mutate { context, root in
-            let item = GroceryItemMO(context: context); assign(item, root: root, context: context)
+            let item = GroceryItemMO(entity: NSEntityDescription.entity(forEntityName: "GroceryItem", in: context)!, insertInto: context); assign(item, root: root, context: context)
             item.id = UUID(); item.name = ingredient.name; item.quantity = ingredient.quantity; item.unit = ingredient.unit
             item.isChecked = false; item.removed = false; item.library = root
             item.order = NSNumber(value: (groceryItems.map(\.order).max() ?? 0) + 1)
@@ -146,8 +162,11 @@ final class RecipeStore: ObservableObject {
     private func changeContributions(_ ids: [UUID], action: (GroceryItemMO) -> Void) throws {
         try mutate { context, root in
             let request = NSFetchRequest<GroceryItemMO>(entityName: "GroceryItem")
-            request.predicate = NSPredicate(format: "library == %@ AND id IN %@", root, ids)
-            for object in try context.fetch(request) { action(object) }
+            request.predicate = NSPredicate(format: "library == %@", root)
+            let objects = try context.fetch(request)
+            let identifiers = Set(ids)
+            let keys = Set(objects.filter { identifiers.contains($0.id ?? UUID()) }.compactMap(\.operationKey))
+            for object in objects where identifiers.contains(object.id ?? UUID()) || object.operationKey.map({ keys.contains($0) }) == true { action(object) }
         }
     }
 
@@ -157,7 +176,7 @@ final class RecipeStore: ObservableObject {
             let reactions = object.reactions?.allObjects.compactMap { $0 as? ReactionMO } ?? []
             let own = reactions.filter { ReactionIdentity.canonical($0.personID ?? "", members: members) == currentMemberID }
                 .sorted { ($0.id?.uuidString ?? "") < ($1.id?.uuidString ?? "") }
-            let reaction = own.first ?? ReactionMO(context: context)
+            let reaction = own.first ?? ReactionMO(entity: NSEntityDescription.entity(forEntityName: "Reaction", in: context)!, insertInto: context)
             if reaction.isInserted { assign(reaction, root: root, context: context) }
             reaction.id = reaction.id ?? UUID(); reaction.personID = currentMemberID
             reaction.emoji = emoji ?? ""; reaction.updatedAt = Date(); reaction.recipe = object
@@ -186,7 +205,7 @@ final class RecipeStore: ObservableObject {
         guard !collection.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw SupperError.invalid("Give the collection a name.") }
         try mutate { context, root in
             let existing = (root.collections?.allObjects as? [RecipeCollectionMO] ?? []).first { $0.id == collection.id }
-            let object = existing ?? RecipeCollectionMO(context: context)
+            let object = existing ?? RecipeCollectionMO(entity: NSEntityDescription.entity(forEntityName: "RecipeCollection", in: context)!, insertInto: context)
             if object.isInserted { assign(object, root: root, context: context) }
             object.id = collection.id; object.name = collection.name; object.isOnHome = NSNumber(value: collection.isOnHome)
             object.order = NSNumber(value: collection.order); object.removed = false; object.library = root
@@ -220,7 +239,7 @@ final class RecipeStore: ObservableObject {
         if let selected, let root = roots.first(where: { $0.id == selected }) { library = root; return }
         if let root = roots.first(where: { $0.objectID.persistentStore == persistence.privateStore }) { library = root; return }
         guard let store = persistence.privateStore else { throw SupperError.invalid("Your private library isn't ready. Reopen Supper and try again.") }
-        let root = SupperLibraryMO(context: context); context.assign(root, to: store)
+        let root = SupperLibraryMO(entity: NSEntityDescription.entity(forEntityName: "SupperLibrary", in: context)!, insertInto: context); context.assign(root, to: store)
         root.id = UUID(); root.name = "Our Supper"; root.createdAt = Date()
         try context.save(); library = root
     }
@@ -237,7 +256,7 @@ final class RecipeStore: ObservableObject {
         let context = persistence.container.viewContext
         let existing = root.members?.allObjects as? [HouseholdMemberMO] ?? []
         if persistence.cloudEnabled, !persistence.container.canUpdateRecord(forManagedObjectWith: root.objectID) { return }
-        let object = existing.first { $0.id == identity.id } ?? HouseholdMemberMO(context: context)
+        let object = existing.first { $0.id == identity.id } ?? HouseholdMemberMO(entity: NSEntityDescription.entity(forEntityName: "HouseholdMember", in: context)!, insertInto: context)
         if object.isInserted { assign(object, root: root, context: context); object.id = identity.id; object.name = identity.name; object.updatedAt = Date(); object.library = root }
         // Only this installation's provisional identity is resolved, never a legacy "me" record.
         if let account = identity.accountID, object.accountID == nil { object.accountID = account }
@@ -276,7 +295,10 @@ final class RecipeStore: ObservableObject {
         // A repeated operation delivered twice is projected once; a removed copy suppresses retries.
         let removedKeys = Set((root.groceryItems?.allObjects as? [GroceryItemMO] ?? []).filter { $0.removed?.boolValue == true }.compactMap(\.operationKey))
         var seen = Set<String>()
-        groceryItems = GroceryMerging.merge(contributions.sorted { ($0.id?.uuidString ?? "") < ($1.id?.uuidString ?? "") }.filter {
+        groceryItems = GroceryMerging.merge(contributions.sorted {
+            if ($0.isChecked?.boolValue ?? false) != ($1.isChecked?.boolValue ?? false) { return $0.isChecked?.boolValue == true }
+            return ($0.id?.uuidString ?? "") < ($1.id?.uuidString ?? "")
+        }.filter {
             guard let key = $0.operationKey else { return true }
             return !removedKeys.contains(key) && seen.insert(key).inserted
         }.map(Self.domainGroceryItem))
@@ -314,7 +336,7 @@ final class RecipeStore: ObservableObject {
         let ids = Set(recipe.ingredients.map(\.id))
         for child in oldIngredients where !ids.contains(child.id ?? UUID()) { context.delete(child) }
         for (order, ingredient) in recipe.ingredients.enumerated() {
-            let child = oldIngredients.first { $0.id == ingredient.id } ?? IngredientMO(context: context)
+            let child = oldIngredients.first { $0.id == ingredient.id } ?? IngredientMO(entity: NSEntityDescription.entity(forEntityName: "Ingredient", in: context)!, insertInto: context)
             if child.isInserted { assign(child, root: root, context: context) }
             child.id = ingredient.id; child.name = ingredient.name; child.quantity = ingredient.quantity; child.unit = ingredient.unit
             child.order = NSNumber(value: order); child.groupName = ingredient.group; child.categoryOverride = ingredient.categoryOverride?.rawValue; child.recipe = object
@@ -323,7 +345,7 @@ final class RecipeStore: ObservableObject {
         let stepIDs = Set(recipe.steps.map(\.id))
         for child in oldSteps where !stepIDs.contains(child.id ?? UUID()) { context.delete(child) }
         for (order, step) in recipe.steps.enumerated() {
-            let child = oldSteps.first { $0.id == step.id } ?? RecipeStepMO(context: context)
+            let child = oldSteps.first { $0.id == step.id } ?? RecipeStepMO(entity: NSEntityDescription.entity(forEntityName: "RecipeStep", in: context)!, insertInto: context)
             if child.isInserted { assign(child, root: root, context: context) }
             child.id = step.id; child.text = step.text; child.order = NSNumber(value: order); child.recipe = object
         }

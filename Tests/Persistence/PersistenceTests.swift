@@ -59,7 +59,7 @@ import Testing
         let store = try await makeStore(); let recipe = Recipe(title: "Soup"); try store.addRecipe(recipe)
         let context = store.persistence.container.viewContext
         let object = try #require(context.fetch(NSFetchRequest<RecipeMO>(entityName: "Recipe")).first)
-        let other = ReactionMO(context: context); other.id = UUID(); other.personID = "another-person"; other.emoji = "❤️"; other.recipe = object
+        let other = ReactionMO(entity: NSEntityDescription.entity(forEntityName: "Reaction", in: context)!, insertInto: context); other.id = UUID(); other.personID = "another-person"; other.emoji = "❤️"; other.recipe = object
         try context.save()
         try store.setReaction("❤️", for: recipe); #expect(store.recipes[0].reactions.count == 2)
         try store.setReaction("👍", for: recipe); #expect(store.recipes[0].reactions.contains { $0.personID == "another-person" && $0.emoji == "❤️" })
@@ -69,7 +69,7 @@ import Testing
         let store = try await makeStore(); let first = try #require(store.activeHouseholdID)
         try store.addRecipe(Recipe(title: "Private"))
         let context = store.persistence.container.viewContext
-        let other = SupperLibraryMO(context: context); context.assign(other, to: try #require(store.persistence.sharedStore))
+        let other = SupperLibraryMO(entity: NSEntityDescription.entity(forEntityName: "SupperLibrary", in: context)!, insertInto: context); context.assign(other, to: try #require(store.persistence.sharedStore))
         other.id = UUID(); other.name = "Shared"; other.createdAt = Date(); try context.save()
         try store.selectHousehold(try #require(other.id)); #expect(store.recipes.isEmpty)
         try store.addRecipe(Recipe(title: "Shared recipe", ingredients: [Ingredient(name: "onion")]))
