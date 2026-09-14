@@ -40,7 +40,7 @@ import Testing
         let second = Ingredient(name: "chicken breasts", quantity: "750", unit: "g")
         try store.addIngredientsToGroceryList(from: b, ingredients: [second], operationID: UUID())
         #expect(store.groceryItems[0].quantity == "1.25"); #expect(store.groceryItems[0].sourceRecipeIDs.count == 2)
-        try store.toggleGroceryItem(store.groceryItems[0]); #expect(store.groceryItems.allSatisfy(\.isChecked))
+        try store.toggleGroceryItem(store.groceryItems[0]); #expect(store.groceryItems.allSatisfy { $0.isChecked })
         try store.deleteGroceryItems(at: IndexSet(integer: 0)); #expect(store.groceryItems.isEmpty)
         try store.addIngredientsToGroceryList(from: a, ingredients: [ingredient], operationID: batch)
         #expect(store.groceryItems.isEmpty)

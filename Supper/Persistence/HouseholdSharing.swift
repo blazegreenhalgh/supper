@@ -1,7 +1,7 @@
 #if SWIFT_PACKAGE
 import SupperCore
 #endif
-import CoreData
+@preconcurrency import CoreData
 import CloudKit
 
 extension RecipeStore {
