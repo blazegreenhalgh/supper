@@ -15,13 +15,14 @@ import XCTest
     }
     func testNativeBackAndInteractiveTransitionsPreserveSearch() {
         let app = launch()
+        XCTAssertFalse(app.searchFields.firstMatch.exists)
+        app.buttons["Search"].firstMatch.tap()
         let search = app.searchFields.firstMatch
-        if !search.exists {
-            let button = app.buttons["Search"].firstMatch
-            if button.exists { button.tap() }
-        }
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap(); search.typeText("Chicken\n")
+        app.buttons["durationFilter"].tap()
+        app.buttons["Up to 30 min"].tap()
+        XCTAssertEqual(app.buttons["durationFilter"].value as? String, "Active")
         openRecipe(app); capture(app, "Immersive recipe detail")
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.buttons["recipe-test-chicken"].waitForExistence(timeout: 5))
@@ -41,6 +42,10 @@ import XCTest
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.searchFields.firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(app.searchFields.firstMatch.value as? String, "Chicken")
+        XCTAssertEqual(app.buttons["durationFilter"].value as? String, "Active")
+        XCTAssertTrue(app.buttons["clearFilters"].isHittable)
+        app.buttons["clearFilters"].tap()
+        XCTAssertEqual(app.buttons["durationFilter"].value as? String, "Not active")
     }
     func testEditorCancelKeepsRecipeAndSingleReactionControl() {
         let app = launch(); openRecipe(app)
@@ -53,5 +58,65 @@ import XCTest
         XCTAssertTrue(app.buttons["editRecipe"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Chicken with rice"].exists)
         XCTAssertFalse(app.staticTexts["Chicken with rice edited"].exists)
+    }
+
+    func testFocusedIngredientEditorAndFullScreenMethod() {
+        let app = launch(); openRecipe(app)
+        app.buttons["editRecipe"].tap()
+        XCTAssertTrue(app.buttons["editIngredients"].waitForExistence(timeout: 5))
+        capture(app, "Recipe editor overview")
+        app.buttons["editIngredients"].tap()
+        app.buttons["addIngredient"].tap()
+        let name = app.textFields["ingredientName"]
+        // A vertical TextField is exposed as a text view on some iOS versions.
+        let field = name.exists ? name : app.textViews["ingredientName"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap(); field.typeText("Lime wedges")
+        let quantity = app.textFields["ingredientQuantity"]
+        quantity.tap(); quantity.typeText("2")
+        capture(app, "Labeled ingredient editor")
+        app.buttons["saveIngredient"].tap()
+        XCTAssertTrue(app.staticTexts["Lime wedges"].waitForExistence(timeout: 5))
+        capture(app, "Ingredient editing list")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["editRecipe"].waitForExistence(timeout: 5))
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["Lime wedges"].waitForExistence(timeout: 5))
+        app.segmentedControls.buttons["Method"].tap()
+        app.buttons["fullScreenMethod"].tap()
+        XCTAssertTrue(app.buttons["closeFullScreenMethod"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["previousFullScreenStep"].isEnabled)
+        app.buttons["nextFullScreenStep"].tap()
+        XCTAssertTrue(app.staticTexts["Serve with rice."].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["nextFullScreenStep"].isEnabled)
+        capture(app, "Full screen method")
+        app.buttons["previousFullScreenStep"].tap()
+        app.buttons["closeFullScreenMethod"].tap()
+        XCTAssertTrue(app.buttons["fullScreenMethod"].waitForExistence(timeout: 5))
+    }
+
+    func testHomepageActionsAndActiveFilters() {
+        let app = launch()
+        app.buttons["durationFilter"].tap(); app.buttons["Up to 30 min"].tap()
+        XCTAssertEqual(app.buttons["durationFilter"].value as? String, "Active")
+        XCTAssertTrue(app.buttons["clearFilters"].isHittable)
+        capture(app, "Homepage active filter")
+        app.buttons["Library options"].tap()
+        XCTAssertFalse(app.buttons["Search with words"].exists)
+        app.buttons["Pick something"].tap()
+        XCTAssertTrue(app.buttons["Open recipe"].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap()
+        app.buttons["clearFilters"].tap()
+        app.buttons["editCollections"].tap()
+        XCTAssertTrue(app.navigationBars["Collections"].waitForExistence(timeout: 5))
+        app.buttons["New collection"].tap()
+        let name = app.textFields["Collection name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("Weeknight")
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["Weeknight"].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap()
+        app.buttons["addRecipe"].tap()
+        XCTAssertTrue(app.textFields["Recipe name"].waitForExistence(timeout: 5))
+        capture(app, "Clean new recipe form")
     }
 }

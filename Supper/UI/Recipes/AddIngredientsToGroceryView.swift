@@ -25,7 +25,9 @@ struct AddIngredientsToGroceryView: View {
                     Label("\(selected.count) of \(recipe.ingredients.count) ingredients selected", systemImage: "basket")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .listRowBackground(SupperStyle.subtle)
+                    Button(selected.count == recipe.ingredients.count ? "Deselect all" : "Select all") {
+                        selected = selected.count == recipe.ingredients.count ? [] : Set(recipe.ingredients.map(\.id))
+                    }
                 } header: {
                     Text(recipe.title)
                         .textCase(nil)
@@ -38,12 +40,12 @@ struct AddIngredientsToGroceryView: View {
                             if selected.contains(ingredient.id) { selected.remove(ingredient.id) }
                             else { selected.insert(ingredient.id) }
                         } label: {
-                            HStack {
-                                IngredientLabel(ingredient: ingredient)
-                                Spacer()
+                            HStack(spacing: 12) {
                                 Image(systemName: selected.contains(ingredient.id) ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(selected.contains(ingredient.id) ? .primary : .tertiary)
-                            }
+                                    .foregroundStyle(selected.contains(ingredient.id) ? Color.accentColor : Color.secondary)
+                                    .font(.title3).accessibilityHidden(true)
+                                IngredientLabel(ingredient: ingredient)
+                            }.contentShape(.rect)
                         }
                         .buttonStyle(.plain)
                         .listRowBackground(SupperStyle.surface)
@@ -61,7 +63,7 @@ struct AddIngredientsToGroceryView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
+                    Button("Add \(selected.count)") {
                         let ingredients = scaledIngredients.filter { selected.contains($0.id) }
                         do {
                             guard householdID == store.activeHouseholdID else { throw SupperError.invalid("The household changed. Reopen Add to Groceries in the intended household.") }

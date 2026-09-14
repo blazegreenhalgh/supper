@@ -60,8 +60,8 @@ final class RecipeStore: ObservableObject {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--ui-testing"), recipes.isEmpty {
                 try addRecipe(Recipe(title: "Chicken with rice", durationMinutes: 25, servings: 4, tags: ["Easy"],
-                    ingredients: [Ingredient(name: "chicken breast", quantity: "500", unit: "g"), Ingredient(name: "cumin", quantity: "1", unit: "tsp", group: "Spice mix")],
-                    steps: [RecipeStep(text: "Cook the chicken and serve with rice.")]))
+                    ingredients: [Ingredient(name: "chicken breast", quantity: "500", unit: "g"), Ingredient(name: "cumin", quantity: "1", unit: "tsp", group: "Spice mix"), Ingredient(name: "onion, finely diced (brown, white or yellow)", quantity: "1")],
+                    steps: [RecipeStep(text: "Cook the chicken."), RecipeStep(text: "Serve with rice.", order: 1)]))
             }
             #endif
             if let first = queuedInvitations.first { pendingInvitation = first; queuedInvitations.removeAll() }

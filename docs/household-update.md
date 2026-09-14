@@ -2,6 +2,12 @@
 
 Supper remains an image-and-title cookbook. Optional recipe details do not introduce meal tracking or ratings. The existing palette and system typography are retained.
 
+## Editing and navigation
+
+Search lives in a dedicated native search-role tab, attached to a persistent navigation stack. Homepage filters and search-tab filters keep independent state, so a hidden query cannot unexpectedly filter the homepage. Both use the same matching logic and picker. Active chips use native prominent blue buttons, with Clear outside the horizontal scroll area. Homepage Edit opens Collections; the options menu contains Pick something and Household.
+
+The recipe editor keeps a single draft with focused ingredient, method, tag, collection and note screens. Individual ingredient/step sheets edit copies and only apply on Add/Done; Cancel Recipe still discards the entire draft. Reordering retains IDs. Source-group recovery remains reviewable inside Ingredients. Ingredient names wrap beside trailing amount capsules. Method offers a full-screen reader sharing its current step with the detail screen.
+
 ## Data and migration
 
 The shipped programmatic model is preserved verbatim in `LegacyModel.swift`. `NSStagedMigrationManager` receives explicit v1 and current model references; all schema changes are additive and optional. Core Data performs an inferred migration in place, keeping its CloudKit mirroring metadata. There is no database reset, destructive recovery, or automatic replacement of an existing library. Regression tests create a real v1 SQLite store and reopen it through the current stack, checking recipe/ingredient IDs, image bytes and legacy reactions.
@@ -28,7 +34,7 @@ Vision performs local text recognition for screenshots and cookbook photos. The 
 
 ## Validation and release
 
-`swift test` runs domain tests plus macOS Core Data integration and migration tests. The Xcode `Supper` scheme includes `SupperUITests` for native navigation/search and editor cancellation. GitHub Actions builds the iOS simulator app and runs these checks before delivery; Xcode Cloud retains the main-to-TestFlight pipeline.
+`swift test` runs domain tests plus macOS Core Data integration and migration tests. The Xcode `Supper` scheme includes `SupperUITests` for native search-tab navigation (normal, interactive and cancelled back with an active filter), editor cancellation, ingredient editing/save, collection creation, active filter clearing and full-screen step navigation. GitHub Actions builds the iOS simulator app and runs these checks before delivery; Xcode Cloud retains the main-to-TestFlight pipeline.
 
 Signed-device checks that require Apple accounts remain separate from simulator coverage:
 

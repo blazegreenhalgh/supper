@@ -1,7 +1,14 @@
-Supper: shared cookbook and household update
+Supper: clearer editing, search and recipe reading
 
-• Recipe detail: immersive full-width photo, one compact reaction menu, smaller ingredient icons and inline amount capsules.
-• Edit recipes, photos, source, notes, tags, base servings, ingredient groups/categories, steps and multiple collections. Cancel keeps the original; failed saves keep your draft.
+• Search now has its own bottom tab. Search words, ingredients, tags and collections; interpret natural-language requests from that screen.
+• Active filter chips turn blue. Clear filters stays at the start of the row, outside the scrolling chips.
+• Pick something is in the homepage options menu. Edit beside Add Recipe opens Collections to create, rename, reorder and hide homepage sections.
+• A cleaner recipe form puts photo and title first. Ingredients and method have dedicated editors with explicit Add actions, labeled fields and reordering.
+• Ingredient amounts stay at the right edge. Grocery selection uses clear leading checkmarks and Select all/Deselect all.
+• Smaller method text, plus a full-screen step reader with Previous and Next. The original recipe link is centered plain text below Add to Groceries.
+
+Please check search and filters after normal back, swipe-back and cancelled swipe-back; adding/editing/reordering ingredients and steps; cancel/save behavior; long ingredient names and large text; and full-screen step navigation.
+
 • Change cooking servings without changing the original recipe. Add to Groceries previews the scaled amounts.
 • Review and recover ingredient groups from the original source. Switch between source groups and shopping categories.
 • Groceries combine compatible weights, volumes and counts, retain contributing recipes, and keep checked/removed items removed during retries.

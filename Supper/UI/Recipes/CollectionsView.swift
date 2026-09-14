@@ -11,7 +11,7 @@ struct CollectionsView: View {
                 Section {
                     ForEach(store.collections) { collection in
                         VStack(alignment: .leading, spacing: 10) {
-                            Button { editing = collection } label: { Label(collection.name, systemImage: "folder").font(.headline) }.buttonStyle(.plain)
+                            Button { editing = collection } label: { Label(collection.name, systemImage: "folder").font(.headline) }.buttonStyle(.borderless)
                             Toggle("Show on homepage", isOn: Binding(get: { collection.isOnHome }, set: { on in
                                 var changed = collection; changed.isOnHome = on
                                 do { try store.saveCollection(changed) } catch { self.error = error.localizedDescription }
@@ -26,9 +26,9 @@ struct CollectionsView: View {
                         var ids = store.collections.map(\.id); ids.move(fromOffsets: offsets, toOffset: destination)
                         do { try store.reorderCollections(ids) } catch { self.error = error.localizedDescription }
                     }
-                } footer: { Text("Drag to arrange homepage sections. Hiding a section keeps its collection. Deleting a collection keeps all its recipes.") }
+                } footer: { Text("Tap Edit to reorder homepage sections, or tap a collection to rename it. Hiding a section keeps its collection. Deleting a collection keeps all its recipes.") }
                 Button("New collection", systemImage: "folder.badge.plus") { editing = RecipeCollection(name: "", order: store.collections.count) }
-            }.navigationTitle("Collections & home").navigationBarTitleDisplayMode(.inline)
+            }.navigationTitle("Collections").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }; ToolbarItem(placement: .primaryAction) { EditButton() } }
                 .sheet(item: $editing) { CollectionEditorView(collection: $0) }
                 .supperError($error, title: "Couldn't update collection")
@@ -62,7 +62,7 @@ struct CollectionMembershipView: View {
     var body: some View {
         NavigationStack {
             List {
-                if store.collections.isEmpty { Text("Create a collection from Collections & homepage in the library menu.").foregroundStyle(.secondary) }
+                if store.collections.isEmpty { Text("Tap Edit on the Recipes screen to create a collection.").foregroundStyle(.secondary) }
                 ForEach(store.collections) { collection in
                     Toggle(collection.name, isOn: Binding(get: { selected.contains(collection.id) }, set: { on in if on { selected.insert(collection.id) } else { selected.remove(collection.id) } }))
                 }

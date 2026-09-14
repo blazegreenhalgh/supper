@@ -4,6 +4,7 @@ struct RecipeLibraryView: View {
     @EnvironmentObject private var store: RecipeStore
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Binding var filter: RecipeFilter
+    var isSearch = false
     let openRecipe: (UUID) -> Void
     @State private var showingAddRecipe = false
     @State private var showingCollections = false
@@ -16,12 +17,19 @@ struct RecipeLibraryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                filters
+                RecipeFilterChips(filter: $filter)
                 HStack {
                     Text("\(filteredRecipes.count) recipes").font(.subheadline).foregroundStyle(.secondary)
                     Spacer()
-                    Button("Pick something", systemImage: "dice") { showingPicker = true }.supperGlassButton()
                 }.padding(.horizontal, 20)
+                if isSearch && !filter.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Button("Interpret this search", systemImage: "sparkle.magnifyingglass") { showingSearchAssistant = true }
+                        .font(.subheadline).padding(.horizontal, 20)
+                }
+                if isSearch && !filter.isActive {
+                    Text("Search titles, ingredients, tags, notes and collections. You can also describe what you want, such as easy chicken under 30 minutes.")
+                        .font(.subheadline).foregroundStyle(.secondary).padding(.horizontal, 20)
+                }
                 if filteredRecipes.isEmpty {
                     ContentUnavailableView {
                         Label(store.recipes.isEmpty ? "No recipes yet" : "No matching recipes", systemImage: "fork.knife")
@@ -30,7 +38,7 @@ struct RecipeLibraryView: View {
                         else { Button("Add recipe") { showingAddRecipe = true }.supperGlassButton(prominent: true) }
                     }
                 } else {
-                    if !filter.isActive {
+                    if !filter.isActive && !isSearch {
                         ForEach(store.collections.filter(\.isOnHome)) { collection in
                             let recipes = store.recipes.filter { $0.collectionIDs.contains(collection.id) }
                             if !recipes.isEmpty {
@@ -55,16 +63,21 @@ struct RecipeLibraryView: View {
             }.padding(.top, 12).padding(.bottom, 32)
         }
         .background(SupperStyle.canvas)
-        .navigationTitle("Supper")
+        .navigationTitle(isSearch ? "Search" : "Supper")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Menu("Library options", systemImage: "ellipsis") {
-                    Button("Collections & homepage", systemImage: "square.grid.2x2") { showingCollections = true }
-                    Button("Household", systemImage: "person.2") { showingHousehold = true }
-                    Button("Search with words", systemImage: "sparkle.magnifyingglass") { showingSearchAssistant = true }
+                    Button("Pick something", systemImage: "dice") { showingPicker = true }
+                    if !isSearch { Button("Household", systemImage: "person.2") { showingHousehold = true } }
                 }
             }
-            ToolbarItem(placement: .topBarTrailing) { Button("Add recipe", systemImage: "plus") { showingAddRecipe = true } }
+            if !isSearch {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button("Edit") { showingCollections = true }.accessibilityIdentifier("editCollections")
+                        .accessibilityHint("Create collections and arrange homepage sections")
+                    Button("Add recipe", systemImage: "plus") { showingAddRecipe = true }.accessibilityIdentifier("addRecipe")
+                }
+            }
         }
         .sheet(isPresented: $showingAddRecipe) { AddRecipeView() }
         .sheet(isPresented: $showingCollections) { CollectionsView() }
@@ -76,39 +89,7 @@ struct RecipeLibraryView: View {
         NavigationLink(value: recipe.id) { RecipeCardView(recipe: recipe) }.buttonStyle(.plain)
             .accessibilityIdentifier(recipe.title == "Chicken with rice" ? "recipe-test-chicken" : "recipe-" + recipe.id.uuidString)
     }
-    private var filters: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                Menu {
-                    Picker("Maximum duration", selection: $filter.maximumMinutes) {
-                        Text("Any duration").tag(Optional<Int>.none)
-                        ForEach([15, 30, 45, 60, 90], id: \.self) { Text("Up to \($0) min").tag(Optional($0)) }
-                    }
-                } label: { Label(filter.maximumMinutes.map { "≤ \($0) min" } ?? "Duration", systemImage: "clock") }.supperGlassButton()
-                Menu {
-                    Section("Match all selected tags") {
-                        ForEach(allTags, id: \.self) { tag in
-                            Toggle(tag, isOn: Binding(get: { filter.tags.contains(tag) }, set: { on in if on { filter.tags.insert(tag) } else { filter.tags.remove(tag) } }))
-                        }
-                    }
-                    Button("Clear tags") { filter.tags = [] }
-                } label: { Label(filter.tags.isEmpty ? "Tags" : filter.tags.sorted().joined(separator: ", "), systemImage: "tag") }.supperGlassButton().disabled(allTags.isEmpty)
-                Menu {
-                    Section("Match all selected collections") {
-                        ForEach(store.collections) { collection in
-                            Toggle(collection.name, isOn: Binding(get: { filter.collectionIDs.contains(collection.id) }, set: { on in if on { filter.collectionIDs.insert(collection.id) } else { filter.collectionIDs.remove(collection.id) } }))
-                        }
-                    }
-                    Button("Clear collections") { filter.collectionIDs = [] }
-                } label: { Label(filter.collectionIDs.isEmpty ? "Collections" : "Collections · \(filter.collectionIDs.count)", systemImage: "folder") }.supperGlassButton().disabled(store.collections.isEmpty)
-                Menu {
-                    Picker("Reactions", selection: $filter.reaction) { ForEach(RecipeFilter.ReactionFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
-                } label: { Label(filter.reaction == .any ? "Reactions" : filter.reaction.rawValue, systemImage: "face.smiling") }.supperGlassButton()
-                Button("Search with words", systemImage: "sparkle.magnifyingglass") { showingSearchAssistant = true }.labelStyle(.iconOnly).supperGlassButton()
-                if filter.isActive { Button("Clear", systemImage: "xmark") { filter = RecipeFilter() }.supperGlassButton() }
-            }.font(.subheadline).controlSize(.small).padding(.horizontal, 20)
-        }
-    }
+
 }
 
 private struct PickRecipeView: View {
@@ -166,7 +147,7 @@ private struct SearchAssistanceView: View {
                         Button("Use these filters") { apply(result) }
                     }
                 }
-            }.navigationTitle("Search with words").navigationBarTitleDisplayMode(.inline)
+            }.navigationTitle("Interpret search").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { task?.cancel(); dismiss() } } }
                 .onDisappear { task?.cancel() }.supperError($error, title: "Couldn't interpret search")
         }

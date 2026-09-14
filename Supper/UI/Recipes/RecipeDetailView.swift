@@ -41,8 +41,16 @@ struct RecipeDetailView: View {
                             if !recipe.notes.isEmpty {
                                 DisclosureGroup("Notes") { Text(recipe.notes).foregroundStyle(.secondary).textSelection(.enabled).padding(.top, 10) }.tint(.primary)
                             }
+                            if !recipe.ingredients.isEmpty {
+                                Button { showingIngredients = true } label: {
+                                    Label("Add to groceries", systemImage: "cart.badge.plus").frame(maxWidth: .infinity)
+                                }.supperGlassButton(prominent: true).controlSize(.large)
+                            }
                             if let url = recipe.sourceURL {
-                                Link(destination: url) { Label("Original recipe", systemImage: "safari") }.supperGlassButton()
+                                Link("Original recipe", destination: url)
+                                    .font(.subheadline).buttonStyle(.plain).foregroundStyle(.tint)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                    .padding(.vertical, 6)
                             }
                         }
                         .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 40)
@@ -119,8 +127,6 @@ struct RecipeDetailView: View {
                     }.background(SupperStyle.surface, in: .rect(cornerRadius: 20))
                 }
             }
-            Button { showingIngredients = true } label: { Label("Add to groceries", systemImage: "cart.badge.plus").frame(maxWidth: .infinity) }
-                .supperGlassButton(prominent: true).controlSize(.large)
         }
     }
 }
@@ -163,6 +169,7 @@ struct RecipeReactionControl: View {
 private struct RecipeMethodView: View {
     let steps: [RecipeStep]
     @State private var selectedStep = 0
+    @State private var showingFullScreen = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var currentIndex: Int { min(selectedStep, max(steps.count - 1, 0)) }
@@ -175,9 +182,8 @@ private struct RecipeMethodView: View {
                         .font(.title2.bold())
                         .accessibilityAddTraits(.isHeader)
                     Spacer()
-                    Text("\(steps.count) steps")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    Button("Full screen", systemImage: "arrow.up.left.and.arrow.down.right") { showingFullScreen = true }
+                        .font(.subheadline).accessibilityIdentifier("fullScreenMethod")
                 }
 
                 VStack(alignment: .leading, spacing: 18) {
@@ -187,13 +193,13 @@ private struct RecipeMethodView: View {
                     ProgressView(value: Double(currentIndex + 1), total: Double(steps.count))
                         .accessibilityLabel("Recipe step")
                     Text(steps[currentIndex].text)
-                        .font(.title3)
-                        .lineSpacing(6)
+                        .font(.body)
+                        .lineSpacing(3)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                 }
-                .padding(22)
+                .padding(20)
                 .background(SupperStyle.surface, in: .rect(cornerRadius: 24))
 
                 SupperGlassGroup {
@@ -226,12 +232,58 @@ private struct RecipeMethodView: View {
                 }
                 .tint(.primary)
             }
+            .fullScreenCover(isPresented: $showingFullScreen) {
+                FullScreenMethodView(steps: steps, selectedStep: $selectedStep)
+            }
         }
     }
 
     private func moveStep(by offset: Int) {
         withAnimation(reduceMotion ? nil : .snappy) {
             selectedStep = min(max(currentIndex + offset, 0), steps.count - 1)
+        }
+    }
+}
+
+private struct FullScreenMethodView: View {
+    @Environment(\.dismiss) private var dismiss
+    let steps: [RecipeStep]
+    @Binding var selectedStep: Int
+    private var currentIndex: Int { min(max(selectedStep, 0), max(steps.count - 1, 0)) }
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                if !steps.isEmpty {
+                    VStack(alignment: .leading, spacing: 24) {
+                        ProgressView(value: Double(currentIndex + 1), total: Double(steps.count))
+                            .accessibilityLabel("Recipe step")
+                        Text(steps[currentIndex].text)
+                            .font(.title2).lineSpacing(6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                            .accessibilityIdentifier("fullScreenStepText")
+                    }.padding(24).frame(maxWidth: 680).frame(maxWidth: .infinity)
+                }
+            }
+            .background(SupperStyle.canvas)
+            .navigationTitle("Step \(currentIndex + 1) of \(steps.count)").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }.accessibilityIdentifier("closeFullScreenMethod")
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                HStack {
+                    Button("Previous", systemImage: "chevron.left") { selectedStep = currentIndex - 1 }
+                        .supperGlassButton().disabled(currentIndex == 0)
+                        .accessibilityIdentifier("previousFullScreenStep")
+                    Spacer(minLength: 12)
+                    Button("Next", systemImage: "chevron.right") { selectedStep = currentIndex + 1 }
+                        .supperGlassButton(prominent: true).disabled(currentIndex >= steps.count - 1)
+                        .accessibilityIdentifier("nextFullScreenStep")
+                }.controlSize(.large).padding(20).frame(maxWidth: 680).frame(maxWidth: .infinity)
+                    .background(SupperStyle.canvas)
+            }
         }
     }
 }

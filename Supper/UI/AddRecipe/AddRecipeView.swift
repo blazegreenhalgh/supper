@@ -12,11 +12,7 @@ struct AddRecipeView: View {
     @State private var tagsText: String
     @State private var showingURLImport = false
     @State private var showingAssistant = false
-    @State private var showingGroups = false
     @State private var errorMessage: String?
-    @State private var editMode: EditMode = .inactive
-    @State private var suggestions: [String] = []
-    @State private var suggesting = false
     @State private var task: Task<Void, Never>?
     @State private var householdID: UUID?
 
@@ -31,72 +27,70 @@ struct AddRecipeView: View {
             Form {
                 Section {
                     PhotosPicker(selection: $photoItem, matching: .images) {
-                        if let data = draft.imageData {
-                            RecipeImage(data: data).frame(height: 220).clipShape(.rect(cornerRadius: 18))
-                        } else {
-                            Label("Add a photo", systemImage: "photo.badge.plus").frame(maxWidth: .infinity, minHeight: 90)
+                        VStack(spacing: 10) {
+                            if let data = draft.imageData {
+                                RecipeImage(data: data).frame(height: 180).clipShape(.rect(cornerRadius: 16))
+                            }
+                            Label(draft.imageData == nil ? "Add photo" : "Change photo", systemImage: "photo.badge.plus")
+                                .font(.subheadline.weight(.medium)).foregroundStyle(.tint)
+                                .frame(maxWidth: .infinity).padding(.vertical, 12)
                         }
                     }.buttonStyle(.plain)
-                    if draft.imageData != nil { Button("Remove photo", role: .destructive) { draft.imageData = nil } }
                     TextField("Recipe name", text: $draft.title).font(.title3.weight(.semibold))
-                } footer: { Text("A photo and title are enough. Everything below is optional.") }
-                Section("Details") {
-                    TextField("Duration in minutes", value: $draft.durationMinutes, format: .number).keyboardType(.numberPad)
-                    TextField("Base servings", value: $draft.servings, format: .number).keyboardType(.numberPad)
-                    TextField("Tags, separated by commas", text: $tagsText)
-                    Button(suggesting ? "Suggesting tags…" : "Suggest tags", systemImage: "sparkles") { suggestTags() }.disabled(suggesting)
-                    if suggesting { Button("Cancel suggestions", role: .cancel) { task?.cancel(); suggesting = false } }
-                    if !suggestions.isEmpty {
-                        ForEach(suggestions, id: \.self) { tag in
-                            Button("Add “\(tag)”") {
-                                var tags = parsedTags; if !tags.contains(tag) { tags.append(tag) }
-                                tagsText = tags.joined(separator: ", "); suggestions.removeAll { $0 == tag }
-                            }
+                    if draft.imageData != nil { Button("Remove photo", role: .destructive) { draft.imageData = nil }.font(.subheadline) }
+                } footer: { Text("Start with a photo and title. Everything else is optional.") }
+                if original == nil {
+                    Section("Import a recipe") {
+                        Button { showingURLImport = true } label: {
+                            Label("From a website", systemImage: "link")
+                        }
+                        Button { showingAssistant = true } label: {
+                            Label("From text or a recipe photo", systemImage: "text.viewfinder")
                         }
                     }
-                    TextField("Notes", text: $draft.notes, axis: .vertical).lineLimit(3...8)
-                    TextField("Source URL", text: $urlText).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                 }
-                Section("Collections") {
-                    if store.collections.isEmpty { Text("Create collections from the homepage menu.").foregroundStyle(.secondary) }
-                    ForEach(store.collections) { collection in
-                        Toggle(collection.name, isOn: Binding(get: { draft.collectionIDs.contains(collection.id) }, set: { on in
-                            if on { draft.collectionIDs.insert(collection.id) } else { draft.collectionIDs.remove(collection.id) }
-                        }))
-                    }
+                Section("Recipe") {
+                    NavigationLink {
+                        IngredientListEditor(ingredients: $draft.ingredients, sourceURL: URL(string: urlText))
+                    } label: {
+                        editorLink("Ingredients", systemImage: "carrot", detail: draft.ingredients.isEmpty ? "Add" : "\(draft.ingredients.count) items")
+                    }.accessibilityIdentifier("editIngredients")
+                    NavigationLink {
+                        MethodListEditor(steps: $draft.steps)
+                    } label: {
+                        editorLink("Method", systemImage: "list.number", detail: draft.steps.isEmpty ? "Add" : "\(draft.steps.count) steps")
+                    }.accessibilityIdentifier("editMethod")
                 }
-                Section {
-                    ForEach($draft.ingredients) { $ingredient in
-                        IngredientEditorRow(ingredient: $ingredient)
+                Section("Details") {
+                    LabeledContent("Duration") {
+                        TextField("Optional", value: $draft.durationMinutes, format: .number)
+                            .keyboardType(.numberPad).multilineTextAlignment(.trailing).accessibilityLabel("Duration in minutes")
+                        Text("min").foregroundStyle(.secondary)
                     }
-                    .onDelete { draft.ingredients.remove(atOffsets: $0) }
-                    .onMove { draft.ingredients.move(fromOffsets: $0, toOffset: $1) }
-                    Button("Add ingredient", systemImage: "plus") { draft.ingredients.append(Ingredient(name: "")) }
-                    if draft.sourceURL != nil && !draft.ingredients.isEmpty {
-                        Button("Recover groups from source", systemImage: "arrow.triangle.2.circlepath") { showingGroups = true }
+                    LabeledContent("Base servings") {
+                        TextField("Optional", value: $draft.servings, format: .number)
+                            .keyboardType(.numberPad).multilineTextAlignment(.trailing).accessibilityLabel("Base servings")
                     }
-                } header: { Text("Ingredients") } footer: { Text("Use Reorder to move or remove ingredients and method steps.") }
-                Section("Method") {
-                    ForEach($draft.steps) { $step in
-                        TextField("Method step", text: $step.text, axis: .vertical).lineLimit(2...12)
-                    }
-                    .onDelete { draft.steps.remove(atOffsets: $0) }
-                    .onMove { draft.steps.move(fromOffsets: $0, toOffset: $1) }
-                    Button("Add step", systemImage: "plus") { draft.steps.append(RecipeStep(text: "")) }
+                    NavigationLink {
+                        RecipeTagsEditor(tagsText: $tagsText, draft: draft)
+                    } label: { editorLink("Tags", systemImage: "tag", detail: parsedTags.isEmpty ? "Add" : "\(parsedTags.count)") }
+                    NavigationLink {
+                        DraftCollectionsEditor(selected: $draft.collectionIDs)
+                    } label: { editorLink("Collections", systemImage: "folder", detail: draft.collectionIDs.isEmpty ? "Add" : "\(draft.collectionIDs.count)") }
+                    NavigationLink {
+                        Form {
+                            Section("Notes") { TextField("Anything you’d like to remember", text: $draft.notes, axis: .vertical).lineLimit(8...30) }
+                        }.navigationTitle("Notes").navigationBarTitleDisplayMode(.inline)
+                    } label: { editorLink("Notes", systemImage: "note.text", detail: draft.notes.isEmpty ? "Add" : "Edit") }
                 }
-                if original == nil {
-                    Section("Import") {
-                        Button("Import from URL", systemImage: "link") { showingURLImport = true }
-                        Button("Recipe text or screenshot", systemImage: "text.viewfinder") { showingAssistant = true }
-                    }
+                Section("Source") {
+                    TextField("Website URL (optional)", text: $urlText).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                 }
             }
-            .environment(\.editMode, $editMode)
             .scrollContentBackground(.hidden).background(SupperStyle.canvas)
             .navigationTitle(original == nil ? "New Recipe" : "Edit Recipe").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { task?.cancel(); dismiss() } }
-                ToolbarItem(placement: .primaryAction) { Button(editMode.isEditing ? "Finish reordering" : "Reorder") { editMode = editMode.isEditing ? .inactive : .active } }
                 ToolbarItem(placement: .confirmationAction) { Button("Save", action: save).disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
             }
             .onAppear { if householdID == nil { householdID = store.activeHouseholdID } }
@@ -112,7 +106,6 @@ struct AddRecipeView: View {
             }
             .sheet(isPresented: $showingURLImport) { URLImportView(onImported: imported) }
             .sheet(isPresented: $showingAssistant) { RecipeAssistanceView(onImported: imported) }
-            .sheet(isPresented: $showingGroups) { GroupRecoveryView(ingredients: $draft.ingredients, sourceURL: draft.sourceURL) }
             .supperError($errorMessage, title: "Couldn't save changes")
         }
     }
@@ -124,15 +117,11 @@ struct AddRecipeView: View {
         draft = value; urlText = value.sourceURL?.absoluteString ?? ""; tagsText = value.tags.joined(separator: ", ")
         showingURLImport = false; showingAssistant = false
     }
-    private func suggestTags() {
-        suggesting = true; task?.cancel()
-        task = Task {
-            defer { suggesting = false }
-            do {
-                let tags = try await OnDeviceRecipeAssistant().suggestTags(for: draft)
-                try Task.checkCancellation(); suggestions = tags.filter { !parsedTags.contains($0) }
-                if suggestions.isEmpty { errorMessage = "No additional tags suggested. You can enter your own tags above." }
-            } catch { if !(error is CancellationError) { errorMessage = "Couldn't suggest tags. You can still enter them manually. \(error.localizedDescription)" } }
+    private func editorLink(_ title: String, systemImage: String, detail: String) -> some View {
+        HStack {
+            Label(title, systemImage: systemImage)
+            Spacer()
+            Text(detail).font(.subheadline).foregroundStyle(.secondary)
         }
     }
     private func save() {
@@ -153,25 +142,5 @@ struct AddRecipeView: View {
             } else { var recipe = draft.makeRecipe(); recipe.id = newID; try store.addRecipe(recipe) }
             dismiss()
         } catch { errorMessage = "\(error.localizedDescription) Your changes are kept here; correct the problem and tap Save again." }
-    }
-}
-
-private struct IngredientEditorRow: View {
-    @Binding var ingredient: Ingredient
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            TextField("Ingredient name", text: $ingredient.name)
-            HStack {
-                TextField("Quantity", text: $ingredient.quantity).accessibilityLabel("Ingredient quantity")
-                TextField("Unit", text: $ingredient.unit).accessibilityLabel("Ingredient unit")
-            }.font(.subheadline)
-            DisclosureGroup("Grouping & category") {
-                TextField("Recipe group, e.g. Spice mix", text: $ingredient.group)
-                Picker("Shopping category", selection: $ingredient.categoryOverride) {
-                    Text("Automatic · \(IngredientPresentation.matching(ingredient.name).aisle.rawValue)").tag(Optional<GroceryAisle>.none)
-                    ForEach(GroceryAisle.allCases, id: \.self) { Text($0.rawValue).tag(Optional($0)) }
-                }
-            }.font(.subheadline)
-        }.padding(.vertical, 6)
     }
 }

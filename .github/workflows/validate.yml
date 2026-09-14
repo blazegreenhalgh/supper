@@ -26,7 +26,7 @@ jobs:
             xcrun xcresulttool export attachments --path UIResults.xcresult --output-path UITestAttachments
             python3 - <<'PY'
           import base64, pathlib, subprocess
-          for index, path in enumerate(sorted(pathlib.Path('UITestAttachments').glob('*.png'))[:8]):
+          for index, path in enumerate(sorted(pathlib.Path('UITestAttachments').glob('*.png'))[:12]):
               target = pathlib.Path('/tmp') / f'supper-ui-{index}.jpg'
               subprocess.run(['sips', '-Z', '700', '-s', 'format', 'jpeg', '-s', 'formatOptions', '50', str(path), '--out', str(target)], check=True, stdout=subprocess.DEVNULL)
               print('SUPPER_SCREENSHOT ' + str(index) + ' ' + base64.b64encode(target.read_bytes()).decode())
