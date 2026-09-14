@@ -22,10 +22,10 @@ For team **H8STHXYFGD**, container **iCloud.com.blazegreenhalgh.Supper**:
 - Created `cloudkit.share` using CloudKit Console's native New Record Type action. Apple generated its nine standard metadata fields automatically.
 - Prepared `Config/CloudKitSchema.ckdb` from the current managed object model, using Apple's documented Core Data mappings and the generated sharing/move-receipt metadata already used by the Envelopes app. It includes all eight entities, string/binary asset companions, to-one relationship keys and sharing metadata. It contains no user records.
 - CloudKit Console reported **Validation Passed**, then **The schema was successfully imported** in development. Existing `Users` and `cloudkit.share` definitions were retained.
-- The production deployment preview contains only nine new record types and their required indexes/default schema role grants. No existing types, fields, or user records are removed. The app continues to store recipes in private/shared databases; schema grants do not publish those private records to the public database.
-- **Production deployment is pending explicit approval.** Automatic approval review rejected clicking Deploy because it changes production schema and role definitions. Production has not been changed.
+- The approved production deployment contained only nine new record types and their required indexes/default schema role grants. No existing types, fields, or user records are removed. The app continues to store recipes in private/shared databases; schema grants do not publish those private records to the public database.
+- **Production deployment completed after explicit user approval.** CloudKit Console confirmed **Changes Deployed — The schema is deployed to Production** on 14 September 2026. The production record-type list was checked for all eight Core Data entities and `cloudkit.share`.
 
-To finish: in the Supper development container, select **Deploy Schema Changes**, review the prepared additions and click **Deploy** after approval. Then retry Invite or manage sharing in TestFlight. Verify opening an existing invitation, sending a new one, recipient acceptance and two-account recipe/grocery sync. Do not reset an environment or delete production records.
+Retry Invite or manage sharing in TestFlight. Verify opening an existing invitation, sending a new one, recipient acceptance and two-account recipe/grocery sync. Do not reset an environment or delete production records.
 
 For future model changes, update the checked schema and its regression test or initialize it using a dedicated iCloud-enabled development build. Never call `initializeCloudKitSchema` in production or on every normal app launch.
 
