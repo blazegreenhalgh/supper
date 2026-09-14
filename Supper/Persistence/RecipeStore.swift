@@ -26,6 +26,11 @@ final class RecipeStore: ObservableObject {
     @Published private(set) var isReady = false
     @Published var errorMessage: String?
     @Published var cloudMessage: String?
+    @Published var cloudAccountMessage: String?
+    @Published var sharingMessage: String?
+    @Published var cloudDiagnostics: String?
+    @Published var checkingCloudAccount = false
+    @Published var removingHouseholdID: UUID?
     @Published var shareProgress: String?
     @Published var pendingInvitation: CKShare.Metadata?
     @Published var joiningHousehold = false
@@ -70,6 +75,7 @@ final class RecipeStore: ObservableObject {
     }
 
     func requireLibrary() throws -> SupperLibraryMO {
+        guard removingHouseholdID == nil else { throw SupperError.invalid("Wait for the library to finish being removed.") }
         guard let library, !library.isDeleted, library.managedObjectContext != nil else {
             throw SupperError.invalid("Choose a household in Settings, then try again.")
         }
@@ -230,7 +236,7 @@ final class RecipeStore: ObservableObject {
         }
     }
 
-    private func ensureLibrary() throws {
+    func ensureLibrary() throws {
         let context = persistence.container.viewContext
         let request = NSFetchRequest<SupperLibraryMO>(entityName: "SupperLibrary")
         request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
@@ -238,12 +244,14 @@ final class RecipeStore: ObservableObject {
         let selected = UserDefaults.standard.string(forKey: "activeHousehold").flatMap(UUID.init(uuidString:))
         if let selected, let root = roots.first(where: { $0.id == selected }) { library = root; return }
         if let root = roots.first(where: { $0.objectID.persistentStore == persistence.privateStore }) { library = root; return }
+        if let root = roots.first { library = root; return }
         guard let store = persistence.privateStore else { throw SupperError.invalid("Your private library isn't ready. Reopen Supper and try again.") }
         let root = SupperLibraryMO(entity: NSEntityDescription.entity(forEntityName: "SupperLibrary", in: context)!, insertInto: context); context.assign(root, to: store)
         root.id = UUID(); root.name = "Our Supper"; root.createdAt = Date()
         try context.save(); library = root
     }
     func selectHousehold(_ id: UUID) throws {
+        guard removingHouseholdID == nil, shareProgress == nil else { throw SupperError.invalid("Wait for the current household action to finish.") }
         let context = persistence.container.viewContext
         let request = NSFetchRequest<SupperLibraryMO>(entityName: "SupperLibrary")
         request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
@@ -264,6 +272,9 @@ final class RecipeStore: ObservableObject {
     }
 
     func refresh() throws {
+        // A zone purge posts store notifications before its completion callback.
+        // Publish the new selection only once removal has finished.
+        guard removingHouseholdID == nil else { return }
         let context = persistence.container.viewContext
         let request = NSFetchRequest<SupperLibraryMO>(entityName: "SupperLibrary")
         let roots = try context.fetch(request)
@@ -316,7 +327,10 @@ final class RecipeStore: ObservableObject {
         observers.append(NotificationCenter.default.addObserver(forName: NSPersistentCloudKitContainer.eventChangedNotification, object: persistence.container, queue: .main) { [weak self] note in
             guard let event = note.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey] as? NSPersistentCloudKitContainer.Event else { return }
             Task { @MainActor in
-                if let error = event.error { self?.cloudMessage = CloudProblem.message(error) }
+                if let error = event.error {
+                    self?.cloudMessage = CloudProblem.message(error)
+                    self?.cloudDiagnostics = CloudProblem.diagnostics(error)
+                }
                 else if event.endDate != nil { do { try self?.refresh() } catch { self?.cloudMessage = error.localizedDescription } }
             }
         })

@@ -1,5 +1,11 @@
 New: describe what you’re craving to find recipes online or create them with Apple Intelligence. Tap the stack to preview/edit, swipe right to keep or left to discard, undo a discard, and switch to grid view. Only kept recipes are saved to your household.
 
+Library management and iCloud feedback:
+- Household → Libraries: swipe left or use the library menu. Check Cancel keeps everything. Delete removes an owned library; Leave removes your access to someone else's library without deleting their recipes.
+- Remove a duplicate library and confirm the other library's recipes and groceries remain. Removing the last library should open a new empty cookbook.
+- Check iCloud should show progress and a visible result. A successful account check must not hide an invitation/setup failure. Copy iCloud diagnostics if needed.
+- Invitations require the Supper CloudKit development schema, including cloudkit.share, to be deployed to production. This build cannot deploy it itself. Verify invitations and owner/participant removal with two Apple accounts after deployment.
+
 Supper: smoother filters and clearer recipe editing
 
 • Edge-to-edge filter scrolling, equal-height clear and filter buttons, and smooth filter/results changes that respect Reduce Motion.
