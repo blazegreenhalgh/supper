@@ -71,7 +71,10 @@ struct RecipeDetailView: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu("Recipe options", systemImage: "ellipsis") {
                             Button("Collections", systemImage: "folder") { showingCollections = true }
-                            if !recipe.ingredients.isEmpty { Button("Add to groceries", systemImage: "cart.badge.plus") { showingIngredients = true } }
+                            if !recipe.ingredients.isEmpty {
+                                Button("Add to groceries", systemImage: "cart.badge.plus") { showingIngredients = true }
+                                    .accessibilityIdentifier("recipeMenuAddToGroceries")
+                            }
                             if let url = recipe.sourceURL { ShareLink(item: url) }
                         }
                     }

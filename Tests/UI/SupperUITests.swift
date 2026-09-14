@@ -3,7 +3,7 @@ import XCTest
 @MainActor final class SupperUITests: XCTestCase {
     private func launch(dark: Bool = false) -> XCUIApplication {
         let app = XCUIApplication(); app.launchArguments = ["--ui-testing"]
-        if dark { app.launchArguments += ["-AppleInterfaceStyle", "Dark"] }
+        if dark { app.launchArguments.append("--ui-testing-dark") }
         app.launch()
         XCTAssertTrue(app.buttons["recipe-test-chicken"].waitForExistence(timeout: 15))
         return app
@@ -159,7 +159,7 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Weeknight"].waitForExistence(timeout: 5))
         app.buttons["Cancel"].tap()
         app.buttons["Recipe options"].tap()
-        app.buttons["Add to groceries"].tap()
+        app.buttons["recipeMenuAddToGroceries"].tap()
         XCTAssertTrue(app.navigationBars["Add to Groceries"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'ingredients selected'")).firstMatch.exists)
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Quantities for'")).firstMatch.exists)
