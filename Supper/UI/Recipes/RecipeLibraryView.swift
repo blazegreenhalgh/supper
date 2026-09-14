@@ -3,6 +3,7 @@ import SwiftUI
 struct RecipeLibraryView: View {
     @EnvironmentObject private var store: RecipeStore
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var filter: RecipeFilter
     var isSearch = false
     let openRecipe: (UUID) -> Void
@@ -20,6 +21,7 @@ struct RecipeLibraryView: View {
                 RecipeFilterChips(filter: $filter)
                 HStack {
                     Text("\(filteredRecipes.count) recipes").font(.subheadline).foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
                     Spacer()
                 }.padding(.horizontal, 20)
                 if isSearch && !filter.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -56,11 +58,13 @@ struct RecipeLibraryView: View {
                         }
                     }
                     Text(filter.isActive ? "Results" : "All recipes").font(.title2.bold()).padding(.horizontal, 20)
+                        .contentTransition(.opacity)
                     LazyVGrid(columns: columns, alignment: .leading, spacing: 24) {
                         ForEach(filteredRecipes) { recipeLink($0) }
                     }.padding(.horizontal, 20)
                 }
             }.padding(.top, 12).padding(.bottom, 32)
+                .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: filter)
         }
         .background(SupperStyle.canvas)
         .navigationTitle(isSearch ? "Search" : "Supper")
@@ -87,6 +91,7 @@ struct RecipeLibraryView: View {
     }
     private func recipeLink(_ recipe: Recipe) -> some View {
         NavigationLink(value: recipe.id) { RecipeCardView(recipe: recipe) }.buttonStyle(.plain)
+            .transition(.opacity)
             .accessibilityIdentifier(recipe.title == "Chicken with rice" ? "recipe-test-chicken" : "recipe-" + recipe.id.uuidString)
     }
 

@@ -104,8 +104,19 @@ import XCTest
 
     func testHomepageActionsAndActiveFilters() {
         let app = launch()
+        let filterScroll = app.scrollViews["filterScrollView"]
+        XCTAssertEqual(filterScroll.frame.minX, app.windows.firstMatch.frame.minX, accuracy: 1)
+        XCTAssertEqual(filterScroll.frame.maxX, app.windows.firstMatch.frame.maxX, accuracy: 1)
+        app.buttons["durationFilter"].tap(); app.buttons["Up to 15 min"].tap()
+        XCTAssertTrue(app.staticTexts["No matching recipes"].waitForExistence(timeout: 5))
+        app.buttons["clearFilters"].tap()
+        XCTAssertTrue(app.buttons["recipe-test-chicken"].waitForExistence(timeout: 5))
         app.buttons["durationFilter"].tap(); app.buttons["Up to 30 min"].tap()
         XCTAssertEqual(app.buttons["durationFilter"].value as? String, "Active")
+        XCTAssertTrue(app.buttons["clearFilters"].isHittable)
+        XCTAssertEqual(app.buttons["clearFilters"].frame.height, app.buttons["durationFilter"].frame.height, accuracy: 1)
+        XCTAssertEqual(filterScroll.frame.maxX, app.windows.firstMatch.frame.maxX, accuracy: 1)
+        filterScroll.swipeLeft()
         XCTAssertTrue(app.buttons["clearFilters"].isHittable)
         capture(app, "Homepage active filter")
         app.buttons["Library options"].tap()

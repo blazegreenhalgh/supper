@@ -1,5 +1,6 @@
-Supper: clearer editing, search and recipe reading
+Supper: smoother filters and clearer recipe editing
 
+• Edge-to-edge filter scrolling, equal-height clear and filter buttons, and smooth filter/results changes that respect Reduce Motion.
 • Search now has its own bottom tab. Search words, ingredients, tags and collections; interpret natural-language requests from that screen.
 • Active filter chips turn blue. Clear filters stays at the start of the row, outside the scrolling chips.
 • Pick something is in the homepage options menu. Edit beside Add Recipe opens Collections to create, rename, reorder and hide homepage sections.
