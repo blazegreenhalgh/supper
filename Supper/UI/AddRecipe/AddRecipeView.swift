@@ -63,9 +63,11 @@ struct AddRecipeView: View {
                 }
                 Section("Details") {
                     LabeledContent("Duration") {
-                        TextField("Optional", value: $draft.durationMinutes, format: .number)
-                            .keyboardType(.numberPad).multilineTextAlignment(.trailing).accessibilityLabel("Duration in minutes")
-                        Text("min").foregroundStyle(.secondary)
+                        HStack(spacing: 4) {
+                            TextField("Optional", value: $draft.durationMinutes, format: .number)
+                                .keyboardType(.numberPad).multilineTextAlignment(.trailing).accessibilityLabel("Duration in minutes")
+                            Text("min").foregroundStyle(.secondary)
+                        }
                     }
                     LabeledContent("Base servings") {
                         TextField("Optional", value: $draft.servings, format: .number)

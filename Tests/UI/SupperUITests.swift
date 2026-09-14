@@ -82,6 +82,7 @@ import XCTest
         XCTAssertTrue(app.buttons["editRecipe"].waitForExistence(timeout: 5))
         app.swipeUp()
         XCTAssertTrue(app.staticTexts["Lime wedges"].waitForExistence(timeout: 5))
+        capture(app, "Ingredient amounts at the trailing edge")
         app.segmentedControls.buttons["Method"].tap()
         app.buttons["fullScreenMethod"].tap()
         XCTAssertTrue(app.buttons["closeFullScreenMethod"].waitForExistence(timeout: 5))

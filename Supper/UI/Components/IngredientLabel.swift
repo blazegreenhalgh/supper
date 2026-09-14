@@ -32,7 +32,6 @@ struct IngredientLabel: View {
                 .background(SupperStyle.subtle, in: .capsule)
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
-                .layoutPriority(1)
         }
     }
 }
