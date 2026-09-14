@@ -41,7 +41,7 @@ struct GroceryListView: View {
             }
 
             ForEach(GroceryAisle.allCases, id: \.self) { aisle in
-                let items = unchecked.filter { IngredientPresentation.matching($0.name).aisle == aisle }
+                let items = unchecked.filter { $0.category == aisle }
                 if !items.isEmpty {
                     Section(aisle.rawValue) {
                         ForEach(items) { item in
@@ -206,8 +206,18 @@ private struct GroceryRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Menu("Shopping category") {
+                Button("Automatic") { category(nil) }
+                ForEach(GroceryAisle.allCases, id: \.self) { aisle in Button(aisle.rawValue) { category(aisle) } }
+            }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityValue(item.isChecked ? "In basket" : "To buy")
         .accessibilityHint(item.isChecked ? "Double tap to put back on your list" : "Double tap to mark as in your basket")
     }
+    private func category(_ aisle: GroceryAisle?) {
+        do { try store.setGroceryCategory(aisle, item: item) } catch { store.errorMessage = error.localizedDescription }
+    }
+
 }

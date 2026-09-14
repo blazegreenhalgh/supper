@@ -1,6 +1,6 @@
 import Foundation
 
-public enum GroceryAisle: String, CaseIterable, Sendable {
+public enum GroceryAisle: String, CaseIterable, Codable, Sendable {
     case produce = "Fresh produce"
     case meatAndSeafood = "Meat & seafood"
     case dairyAndEggs = "Dairy & eggs"

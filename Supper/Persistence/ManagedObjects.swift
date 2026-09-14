@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import SupperCore
+#endif
 import CoreData
 
 @objc(SupperLibraryMO)
@@ -5,6 +8,8 @@ final class SupperLibraryMO: NSManagedObject {
     @NSManaged var id: UUID?
     @NSManaged var name: String?
     @NSManaged var createdAt: Date?
+    @NSManaged var collections: NSSet?
+    @NSManaged var members: NSSet?
     @NSManaged var recipes: NSSet?
     @NSManaged var groceryItems: NSSet?
 }
@@ -16,6 +21,7 @@ final class RecipeMO: NSManagedObject {
     @NSManaged var imageData: Data?
     @NSManaged var durationMinutes: NSNumber?
     @NSManaged var servings: NSNumber?
+    @NSManaged var collectionIDsJSON: String?
     @NSManaged var tagsJSON: String?
     @NSManaged var notes: String?
     @NSManaged var sourceURL: String?
@@ -33,6 +39,8 @@ final class IngredientMO: NSManagedObject {
     @NSManaged var quantity: String?
     @NSManaged var unit: String?
     @NSManaged var order: NSNumber?
+    @NSManaged var groupName: String?
+    @NSManaged var categoryOverride: String?
     @NSManaged var recipe: RecipeMO?
 }
 
@@ -49,6 +57,7 @@ final class ReactionMO: NSManagedObject {
     @NSManaged var id: UUID?
     @NSManaged var personID: String?
     @NSManaged var emoji: String?
+    @NSManaged var updatedAt: Date?
     @NSManaged var recipe: RecipeMO?
 }
 
@@ -60,6 +69,28 @@ final class GroceryItemMO: NSManagedObject {
     @NSManaged var unit: String?
     @NSManaged var isChecked: NSNumber?
     @NSManaged var sourceRecipeIDsJSON: String?
+    @NSManaged var operationKey: String?
+    @NSManaged var removed: NSNumber?
+    @NSManaged var categoryOverride: String?
     @NSManaged var order: NSNumber?
+    @NSManaged var library: SupperLibraryMO?
+}
+
+@objc(RecipeCollectionMO)
+final class RecipeCollectionMO: NSManagedObject {
+    @NSManaged var id: UUID?
+    @NSManaged var name: String?
+    @NSManaged var isOnHome: NSNumber?
+    @NSManaged var order: NSNumber?
+    @NSManaged var removed: NSNumber?
+    @NSManaged var library: SupperLibraryMO?
+}
+
+@objc(HouseholdMemberMO)
+final class HouseholdMemberMO: NSManagedObject {
+    @NSManaged var id: String?
+    @NSManaged var name: String?
+    @NSManaged var accountID: String?
+    @NSManaged var updatedAt: Date?
     @NSManaged var library: SupperLibraryMO?
 }

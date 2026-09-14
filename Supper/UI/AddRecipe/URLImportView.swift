@@ -3,6 +3,7 @@ import SwiftUI
 struct URLImportView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var urlText = ""
+    @State private var importTask: Task<Void, Never>?
     @State private var isImporting = false
     @State private var errorMessage: String?
 
@@ -44,8 +45,9 @@ struct URLImportView: View {
             .navigationTitle("Import from URL")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { importTask?.cancel(); dismiss() } }
             }
+            .onDisappear { importTask?.cancel() }
             .alert("Couldn't import recipe", isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
@@ -66,17 +68,18 @@ struct URLImportView: View {
     private func importRecipe() {
         guard let url = parsedURL else { return }
         isImporting = true
-        Task {
+        importTask = Task {
             do {
                 let draft = try await importer.importRecipe(from: url)
                 await MainActor.run {
                     isImporting = false
+                    guard !Task.isCancelled else { return }
                     onImported(draft)
                 }
             } catch {
                 await MainActor.run {
                     isImporting = false
-                    errorMessage = error.localizedDescription
+                    if !(error is CancellationError) { errorMessage = error.localizedDescription }
                 }
             }
         }

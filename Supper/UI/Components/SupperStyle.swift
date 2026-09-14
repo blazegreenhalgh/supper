@@ -50,3 +50,12 @@ struct SupperGlassGroup<Content: View>: View {
         }
     }
 }
+
+
+extension View {
+    func supperError(_ message: Binding<String?>, title: String) -> some View {
+        alert(title, isPresented: Binding(get: { message.wrappedValue != nil }, set: { if !$0 { message.wrappedValue = nil } })) {
+            Button("OK", role: .cancel) { message.wrappedValue = nil }
+        } message: { Text(message.wrappedValue ?? "") }
+    }
+}

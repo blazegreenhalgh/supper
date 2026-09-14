@@ -1,0 +1,19 @@
+name: Validate Supper
+on:
+  push:
+    branches: [main, supper-household-update]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 26
+        run: sudo xcode-select -s /Applications/Xcode_26.0.app/Contents/Developer
+      - name: Domain and persistence regression tests
+        run: swift test
+      - name: Build iOS simulator app
+        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build

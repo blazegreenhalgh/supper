@@ -1,3 +1,6 @@
+#if SWIFT_PACKAGE
+import SupperCore
+#endif
 import CoreData
 import CloudKit
 
@@ -25,13 +28,18 @@ final class PersistenceStack {
         ].map { url, scope in
             let description = NSPersistentStoreDescription(url: url)
             description.shouldAddStoreAsynchronously = true
+            description.shouldMigrateStoreAutomatically = true
+            description.shouldInferMappingModelAutomatically = true
+            description.setOption(Self.migrationManager(), forKey: NSPersistentStoreStagedMigrationManagerOptionKey)
 
             if inMemory {
                 description.type = NSInMemoryStoreType
             } else {
                 description.setOption(true as NSNumber, forKey: NSPersistentHistoryTrackingKey)
                 description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
+                #if os(iOS)
                 description.setOption(FileProtectionType.completeUntilFirstUserAuthentication as NSObject, forKey: NSPersistentStoreFileProtectionKey)
+                #endif
             }
 
             if cloudEnabled {
@@ -78,131 +86,47 @@ final class PersistenceStack {
     }
 
     static func model() -> NSManagedObjectModel {
-        func entity(_ name: String, _ className: String) -> NSEntityDescription {
-            let entity = NSEntityDescription()
-            entity.name = name
-            entity.managedObjectClassName = className
-            return entity
+        let model = legacyModel()
+        func add(_ entity: String, _ name: String, _ type: NSAttributeType) {
+            let attribute = NSAttributeDescription(); attribute.name = name
+            attribute.attributeType = type; attribute.isOptional = true
+            model.entitiesByName[entity]!.properties.append(attribute)
         }
-
-        func attribute(_ name: String, _ type: NSAttributeType, external: Bool = false) -> NSAttributeDescription {
-            let attribute = NSAttributeDescription()
-            attribute.name = name
-            attribute.attributeType = type
-            attribute.isOptional = true
-            if external { attribute.allowsExternalBinaryDataStorage = true }
-            return attribute
+        add("Recipe", "collectionIDsJSON", .stringAttributeType)
+        add("Ingredient", "groupName", .stringAttributeType)
+        add("Ingredient", "categoryOverride", .stringAttributeType)
+        add("Reaction", "updatedAt", .dateAttributeType)
+        add("GroceryItem", "operationKey", .stringAttributeType)
+        add("GroceryItem", "removed", .booleanAttributeType)
+        add("GroceryItem", "categoryOverride", .stringAttributeType)
+        func child(_ name: String, _ className: String, _ inverse: String) {
+            let entity = NSEntityDescription(); entity.name = name; entity.managedObjectClassName = className
+            model.entities.append(entity)
+            let library = model.entitiesByName["SupperLibrary"]!
+            let toRoot = NSRelationshipDescription(); toRoot.name = "library"; toRoot.destinationEntity = library
+            toRoot.minCount = 0; toRoot.maxCount = 1; toRoot.isOptional = true; toRoot.deleteRule = .nullifyDeleteRule
+            let children = NSRelationshipDescription(); children.name = inverse; children.destinationEntity = entity
+            children.minCount = 0; children.maxCount = 0; children.isOptional = true; children.deleteRule = .cascadeDeleteRule
+            children.inverseRelationship = toRoot; toRoot.inverseRelationship = children
+            library.properties.append(children); entity.properties.append(toRoot)
         }
-
-        func relationship(
-            _ name: String,
-            destination: NSEntityDescription,
-            toMany: Bool,
-            deleteRule: NSDeleteRule
-        ) -> NSRelationshipDescription {
-            let relationship = NSRelationshipDescription()
-            relationship.name = name
-            relationship.destinationEntity = destination
-            relationship.minCount = 0
-            relationship.maxCount = toMany ? 0 : 1
-            relationship.isOptional = true
-            relationship.isOrdered = false
-            relationship.deleteRule = deleteRule
-            return relationship
-        }
-
-        let library = entity("SupperLibrary", "SupperLibraryMO")
-        let recipe = entity("Recipe", "RecipeMO")
-        let ingredient = entity("Ingredient", "IngredientMO")
-        let step = entity("RecipeStep", "RecipeStepMO")
-        let reaction = entity("Reaction", "ReactionMO")
-        let grocery = entity("GroceryItem", "GroceryItemMO")
-
-        library.properties = [
-            attribute("id", .UUIDAttributeType),
-            attribute("name", .stringAttributeType),
-            attribute("createdAt", .dateAttributeType)
-        ]
-
-        recipe.properties = [
-            attribute("id", .UUIDAttributeType),
-            attribute("title", .stringAttributeType),
-            attribute("imageData", .binaryDataAttributeType, external: true),
-            attribute("durationMinutes", .integer64AttributeType),
-            attribute("servings", .integer64AttributeType),
-            attribute("tagsJSON", .stringAttributeType),
-            attribute("notes", .stringAttributeType),
-            attribute("sourceURL", .stringAttributeType),
-            attribute("createdAt", .dateAttributeType)
-        ]
-
-        ingredient.properties = [
-            attribute("id", .UUIDAttributeType),
-            attribute("name", .stringAttributeType),
-            attribute("quantity", .stringAttributeType),
-            attribute("unit", .stringAttributeType),
-            attribute("order", .integer64AttributeType)
-        ]
-
-        step.properties = [
-            attribute("id", .UUIDAttributeType),
-            attribute("text", .stringAttributeType),
-            attribute("order", .integer64AttributeType)
-        ]
-
-        reaction.properties = [
-            attribute("id", .UUIDAttributeType),
-            attribute("personID", .stringAttributeType),
-            attribute("emoji", .stringAttributeType)
-        ]
-
-        grocery.properties = [
-            attribute("id", .UUIDAttributeType),
-            attribute("name", .stringAttributeType),
-            attribute("quantity", .stringAttributeType),
-            attribute("unit", .stringAttributeType),
-            attribute("isChecked", .booleanAttributeType),
-            attribute("sourceRecipeIDsJSON", .stringAttributeType),
-            attribute("order", .integer64AttributeType)
-        ]
-
-        let libraryRecipes = relationship("recipes", destination: recipe, toMany: true, deleteRule: .cascadeDeleteRule)
-        let recipeLibrary = relationship("library", destination: library, toMany: false, deleteRule: .nullifyDeleteRule)
-        libraryRecipes.inverseRelationship = recipeLibrary
-        recipeLibrary.inverseRelationship = libraryRecipes
-        library.properties.append(libraryRecipes)
-        recipe.properties.append(recipeLibrary)
-
-        let recipeIngredients = relationship("ingredients", destination: ingredient, toMany: true, deleteRule: .cascadeDeleteRule)
-        let ingredientRecipe = relationship("recipe", destination: recipe, toMany: false, deleteRule: .nullifyDeleteRule)
-        recipeIngredients.inverseRelationship = ingredientRecipe
-        ingredientRecipe.inverseRelationship = recipeIngredients
-        recipe.properties.append(recipeIngredients)
-        ingredient.properties.append(ingredientRecipe)
-
-        let recipeSteps = relationship("steps", destination: step, toMany: true, deleteRule: .cascadeDeleteRule)
-        let stepRecipe = relationship("recipe", destination: recipe, toMany: false, deleteRule: .nullifyDeleteRule)
-        recipeSteps.inverseRelationship = stepRecipe
-        stepRecipe.inverseRelationship = recipeSteps
-        recipe.properties.append(recipeSteps)
-        step.properties.append(stepRecipe)
-
-        let recipeReactions = relationship("reactions", destination: reaction, toMany: true, deleteRule: .cascadeDeleteRule)
-        let reactionRecipe = relationship("recipe", destination: recipe, toMany: false, deleteRule: .nullifyDeleteRule)
-        recipeReactions.inverseRelationship = reactionRecipe
-        reactionRecipe.inverseRelationship = recipeReactions
-        recipe.properties.append(recipeReactions)
-        reaction.properties.append(reactionRecipe)
-
-        let libraryGroceries = relationship("groceryItems", destination: grocery, toMany: true, deleteRule: .cascadeDeleteRule)
-        let groceryLibrary = relationship("library", destination: library, toMany: false, deleteRule: .nullifyDeleteRule)
-        libraryGroceries.inverseRelationship = groceryLibrary
-        groceryLibrary.inverseRelationship = libraryGroceries
-        library.properties.append(libraryGroceries)
-        grocery.properties.append(groceryLibrary)
-
-        let model = NSManagedObjectModel()
-        model.entities = [library, recipe, ingredient, step, reaction, grocery]
+        child("RecipeCollection", "RecipeCollectionMO", "collections")
+        add("RecipeCollection", "id", .UUIDAttributeType); add("RecipeCollection", "name", .stringAttributeType)
+        add("RecipeCollection", "isOnHome", .booleanAttributeType); add("RecipeCollection", "order", .integer64AttributeType)
+        add("RecipeCollection", "removed", .booleanAttributeType)
+        child("HouseholdMember", "HouseholdMemberMO", "members")
+        add("HouseholdMember", "id", .stringAttributeType); add("HouseholdMember", "name", .stringAttributeType)
+        add("HouseholdMember", "accountID", .stringAttributeType); add("HouseholdMember", "updatedAt", .dateAttributeType)
         return model
+    }
+
+    /// Explicit model references make the shipped programmatic v1 model available to Core Data.
+    /// Staged lightweight migration retains mirroring metadata and persistent history in place.
+    static func migrationManager() -> NSStagedMigrationManager {
+        let source = legacyModel(); let destination = model()
+        let stage = NSCustomMigrationStage(
+            migratingFrom: NSManagedObjectModelReference(model: source, versionChecksum: source.versionChecksum),
+            to: NSManagedObjectModelReference(model: destination, versionChecksum: destination.versionChecksum))
+        return NSStagedMigrationManager([stage])
     }
 }
