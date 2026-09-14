@@ -76,11 +76,28 @@ public struct RecipeStep: Identifiable, Hashable, Sendable {
     public var id: UUID
     public var text: String
     public var order: Int
+    public var group: String
 
-    public init(id: UUID = UUID(), text: String, order: Int = 0) {
+    public init(id: UUID = UUID(), text: String, order: Int = 0, group: String = "") {
         self.id = id
         self.text = text
         self.order = order
+        self.group = group
+    }
+
+    /// Human-readable Markdown keeps section names compatible with the existing
+    /// CloudKit text field and older clients, without requiring a schema rollout.
+    public var storedText: String {
+        let heading = group.components(separatedBy: .newlines).joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        return heading.isEmpty ? text : "## \(heading)\n\n\(text)"
+    }
+
+    public init(id: UUID = UUID(), storedText: String, order: Int = 0) {
+        if storedText.hasPrefix("## "), let separator = storedText.range(of: "\n\n"),
+           !storedText[..<separator.lowerBound].contains("\n") {
+            self.init(id: id, text: String(storedText[separator.upperBound...]), order: order,
+                      group: String(storedText[..<separator.lowerBound].dropFirst(3)))
+        } else { self.init(id: id, text: storedText, order: order) }
     }
 }
 
@@ -133,7 +150,7 @@ public struct GroceryItem: Identifiable, Hashable, Sendable {
     }
 }
 
-public struct RecipeDraft: Sendable {
+public struct RecipeDraft: Hashable, Sendable {
     public var collectionIDs: Set<UUID> = []
     public var title: String
     public var imageData: Data?

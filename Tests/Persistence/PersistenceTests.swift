@@ -30,6 +30,25 @@ import Testing
         draft.title = ""; #expect(throws: (any Error).self) { try store.updateRecipe(draft.applying(to: original)) }
         #expect(store.recipes[0].title == "Carrot soup"); #expect(draft.ingredients[0].quantity == "3")
     }
+    @Test func assistantSectionsAndSourcesSurvivePersistence() async throws {
+        let store = try await makeStore()
+        let original = Recipe(title: "Naan bread pizza")
+        try store.addRecipe(original)
+        let draft = RecipeDraft(recipe: original)
+        let changed = try RecipeAssistantPatch(
+            ingredients: [.init(operation: .add, name: "Flour", quantity: "300", unit: "g", group: "Naan bread")],
+            steps: [.init(operation: .add, text: "Mix the dough.", group: "Naan bread")]).applying(to: draft)
+        let source = RecipeAssistantSource(title: "Naan", url: URL(string: "https://www.recipetineats.com/naan-recipe/")!)
+        let applied = try RecipeAssistantProposal(base: draft, suggested: changed, sources: [source]).applying(to: draft)
+        try store.updateRecipe(applied.applying(to: original))
+        try store.refresh()
+        let saved = try #require(store.recipes.first)
+        #expect(saved.steps[0].group == "Naan bread")
+        #expect(saved.steps[0].text == "Mix the dough.")
+        #expect(saved.ingredients[0].group == "Naan bread")
+        #expect(saved.notes.contains(source.url.absoluteString))
+        #expect(saved.id == original.id)
+    }
     @Test func groceryRetriesClearAndMultipleSources() async throws {
         let store = try await makeStore(); let a = Recipe(title: "A"), b = Recipe(title: "B")
         try store.addRecipe(a); try store.addRecipe(b)

@@ -12,7 +12,7 @@ public struct RecipeDocumentParser {
         return RecipeDraft(title: cleanText(string(recipe["name"]) ?? ""), durationMinutes: duration,
                            servings: string(recipe["recipeYield"]).flatMap(firstInteger), tags: parseTags(recipe),
                            sourceURL: sourceURL, ingredients: ingredients,
-                           steps: instructionStrings(recipe["recipeInstructions"]).enumerated().map { RecipeStep(text: $0.element, order: $0.offset) })
+                           steps: instructionSteps(recipe["recipeInstructions"]))
     }
 
     public func imageURL(html: String) -> URL? { extractRecipeObject(from: html).flatMap { extractImageURL($0["image"]) } }
@@ -102,19 +102,27 @@ public struct RecipeDocumentParser {
     }
 
     func instructionStrings(_ value: Any?) -> [String] {
-        if let strings = value as? [String] { return strings.map(cleanText).filter { !$0.isEmpty } }
-        if let string = value as? String { return [cleanText(string)].filter { !$0.isEmpty } }
-        if let array = value as? [Any] {
-            return array.flatMap { item -> [String] in
-                if let string = item as? String { return [cleanText(string)] }
-                if let object = item as? [String: Any] {
-                    if let text = string(object["text"]) { return [cleanText(text)] }
-                    if let list = object["itemListElement"] { return instructionStrings(list) }
-                }
-                return []
-            }.filter { !$0.isEmpty }
+        instructionSteps(value).map(\.text)
+    }
+
+    /// Preserve HowToSection headings so variants and components from an online
+    /// source are not flattened into one ambiguous method for the assistant.
+    func instructionSteps(_ value: Any?) -> [RecipeStep] {
+        var result: [RecipeStep] = []
+        func visit(_ value: Any, group: String) {
+            if let text = value as? String {
+                let cleaned = cleanText(text)
+                if !cleaned.isEmpty { result.append(RecipeStep(text: cleaned, order: result.count, group: group)) }
+            } else if let array = value as? [Any] {
+                for item in array { visit(item, group: group) }
+            } else if let object = value as? [String: Any] {
+                if let list = object["itemListElement"] {
+                    visit(list, group: cleanText(string(object["name"]) ?? group))
+                } else if let text = string(object["text"]) { visit(text, group: group) }
+            }
         }
-        return []
+        if let value { visit(value, group: "") }
+        return result
     }
 
     func parseTags(_ recipe: [String: Any]) -> [String] {

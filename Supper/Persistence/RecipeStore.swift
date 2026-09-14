@@ -361,7 +361,7 @@ final class RecipeStore: ObservableObject {
         for (order, step) in recipe.steps.enumerated() {
             let child = oldSteps.first { $0.id == step.id } ?? RecipeStepMO(entity: NSEntityDescription.entity(forEntityName: "RecipeStep", in: context)!, insertInto: context)
             if child.isInserted { assign(child, root: root, context: context) }
-            child.id = step.id; child.text = step.text; child.order = NSNumber(value: order); child.recipe = object
+            child.id = step.id; child.text = step.storedText; child.order = NSNumber(value: order); child.recipe = object
         }
         // Reactions are a separate member-owned operation and are never rewritten by an editor.
     }
@@ -374,7 +374,7 @@ final class RecipeStore: ObservableObject {
             }
             return value
         }.sorted { $0.order < $1.order }
-        let steps = (object.steps?.allObjects as? [RecipeStepMO] ?? []).map { RecipeStep(id: $0.id ?? UUID(), text: $0.text ?? "", order: $0.order?.intValue ?? 0) }.sorted { $0.order < $1.order }
+        let steps = (object.steps?.allObjects as? [RecipeStepMO] ?? []).map { RecipeStep(id: $0.id ?? UUID(), storedText: $0.text ?? "", order: $0.order?.intValue ?? 0) }.sorted { $0.order < $1.order }
         let reactions = (object.reactions?.allObjects as? [ReactionMO] ?? []).map { RecipeReaction(id: $0.id ?? UUID(), personID: $0.personID ?? "", emoji: $0.emoji ?? "", updatedAt: $0.updatedAt ?? .distantPast) }
         return Recipe(id: object.id ?? UUID(), title: object.title ?? "Untitled Recipe", imageData: object.imageData,
                       durationMinutes: object.durationMinutes?.intValue, servings: object.servings?.intValue, tags: decodeStrings(object.tagsJSON),
