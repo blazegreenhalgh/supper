@@ -42,7 +42,7 @@ struct RecipeDetailView: View {
                                 }.pickerStyle(.segmented)
                             }
                             if !recipe.ingredients.isEmpty && (section == "Ingredients" || recipe.steps.isEmpty) { ingredients(recipe) }
-                            if !recipe.steps.isEmpty && (section == "Method" || recipe.ingredients.isEmpty) { RecipeMethodView(steps: recipe.steps) }
+                            if !recipe.steps.isEmpty && (section == "Method" || recipe.ingredients.isEmpty) { RecipeMethodView(steps: recipe.steps, ingredients: recipe.ingredients, baseServings: recipe.servings, selectedServings: selectedServings) }
                             if !recipe.notes.isEmpty {
                                 DisclosureGroup("Notes") { Text(recipe.notes).foregroundStyle(.secondary).textSelection(.enabled).padding(.top, 10) }.tint(.primary)
                             }
@@ -177,6 +177,10 @@ struct RecipeReactionControl: View {
 }
 private struct RecipeMethodView: View {
     let steps: [RecipeStep]
+    let ingredients: [Ingredient]
+    let baseServings: Int?
+    let selectedServings: Int?
+    @State private var ingredientMatches: StepIngredientMatches?
     @State private var selectedStep = 0
     @State private var showingFullScreen = false
     @State private var showingAllSteps = true
@@ -205,7 +209,7 @@ private struct RecipeMethodView: View {
                 }.font(.subheadline)
             }
             .fullScreenCover(isPresented: $showingFullScreen) {
-                FullScreenMethodView(steps: steps, selectedStep: $selectedStep)
+                FullScreenMethodView(steps: steps, ingredients: ingredients, baseServings: baseServings, selectedServings: selectedServings, selectedStep: $selectedStep, matches: $ingredientMatches)
             }
         }
     }
@@ -221,13 +225,27 @@ private struct RecipeMethodView: View {
 private struct FullScreenMethodView: View {
     @Environment(\.dismiss) private var dismiss
     let steps: [RecipeStep]
+    let ingredients: [Ingredient]
+    let baseServings: Int?
+    let selectedServings: Int?
     @Binding var selectedStep: Int
+    @Binding var matches: StepIngredientMatches?
+    @State private var isMatching = false
+    @State private var retry = 0
+    private struct MatchingRequest: Hashable { let input: StepIngredientInput; let retry: Int }
+    private var input: StepIngredientInput { StepIngredientInput(ingredients: ingredients, steps: steps) }
+    private var displayedMatches: StepIngredientMatches {
+        if let matches, matches.input == input { return matches }
+        return StepIngredientMatching.explicitMatches(input)
+    }
     private var currentIndex: Int { min(max(selectedStep, 0), max(steps.count - 1, 0)) }
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             ScrollView {
                 if !steps.isEmpty {
                     VStack(alignment: .leading, spacing: 24) {
+                        Color.clear.frame(height: 0).id("stepTop")
                         ProgressView(value: Double(currentIndex + 1), total: Double(steps.count))
                             .accessibilityLabel("Recipe step")
                         Text(steps[currentIndex].text)
@@ -235,9 +253,13 @@ private struct FullScreenMethodView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
                             .accessibilityIdentifier("fullScreenStepText")
+                        if !ingredients.isEmpty { stepIngredients }
                     }.padding(24).frame(maxWidth: 680).frame(maxWidth: .infinity)
                 }
             }
+            .onChange(of: currentIndex) { _, _ in proxy.scrollTo("stepTop", anchor: .top) }
+            }
+            .task(id: MatchingRequest(input: input, retry: retry)) { await matchIngredients(force: retry > 0) }
             .background(SupperStyle.canvas)
             .navigationTitle("Step \(currentIndex + 1) of \(steps.count)").navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -259,4 +281,58 @@ private struct FullScreenMethodView: View {
             }
         }
     }
+    private var stepIngredients: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Divider()
+            Text("For this step").font(.headline).accessibilityAddTraits(.isHeader)
+            if isMatching {
+                ProgressView("Matching ingredients on device…").font(.caption)
+            }
+            let relevant = displayedMatches.ingredients(for: steps[currentIndex].id,
+                baseServings: baseServings, selectedServings: selectedServings)
+            if relevant.isEmpty {
+                Text("No ingredients identified for this step.").font(.callout).foregroundStyle(.secondary)
+            } else {
+                ingredientRows(relevant, prefix: "stepIngredient")
+            }
+            Text(amountsNote).font(.caption).foregroundStyle(.secondary)
+            if !isMatching, let notice = displayedMatches.notice {
+                Text(notice).font(.caption).foregroundStyle(.secondary)
+                Button("Retry matching") { retry += 1 }.font(.caption).disabled(isMatching)
+            }
+            DisclosureGroup("All ingredients") {
+                ingredientRows(ingredients.map { $0.scaled(from: baseServings, to: selectedServings) }, prefix: "allIngredient")
+            }.font(.subheadline).padding(.top, 8)
+        }
+    }
+    private var amountsNote: String {
+        if let baseServings, baseServings > 0, let selectedServings, selectedServings > 0 {
+            return "Recipe amounts for \(selectedServings) servings. Follow any split amounts in the step."
+        }
+        return "Recipe amounts. Follow any split amounts in the step."
+    }
+    private func ingredientRows(_ items: [Ingredient], prefix: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(IngredientSection.sections(items, byShoppingCategory: false)) { section in
+                if section.title != "Ingredients" {
+                    Text(section.title).font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.top, 8)
+                }
+                ForEach(section.ingredients) { ingredient in
+                    IngredientLabel(ingredient: ingredient)
+                        .accessibilityIdentifier("\(prefix)-\(ingredient.name)")
+                }
+            }
+        }
+    }
+    @MainActor private func matchIngredients(force: Bool = false) async {
+        guard !ingredients.isEmpty, force || matches?.input != input else { return }
+        isMatching = true
+        defer { isMatching = false }
+        do {
+            let result = try await OnDeviceRecipeAssistant().ingredientsByStep(input)
+            try Task.checkCancellation()
+            matches = result
+        } catch { /* Closing the sheet cancels assistance without changing the recipe. */ }
+    }
+
 }
