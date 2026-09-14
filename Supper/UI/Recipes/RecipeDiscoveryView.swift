@@ -268,9 +268,10 @@ private struct RecipeDiscoveryStack: View {
     let discard: (UUID) -> Void
     @State private var drag: CGSize = .zero
     @State private var horizontalDrag: Bool?
+    @State private var keepingDirection = true
     @GestureState private var gestureActive = false
 
-    private var decisionColor: Color { drag.width >= 0 ? .green : .red }
+    private var decisionColor: Color { keepingDirection ? .green : .red }
     private var decisionProgress: Double { min(Double(abs(drag.width) / 100), 1) }
 
     var body: some View {
@@ -327,8 +328,8 @@ private struct RecipeDiscoveryStack: View {
                     .strokeBorder(decisionColor.opacity(index == 0 ? decisionProgress : 0), lineWidth: 3)
                     .allowsHitTesting(false)
             }
-            .overlay(alignment: drag.width >= 0 ? .topLeading : .topTrailing) {
-                Label(drag.width >= 0 ? "KEEP" : "DISCARD", systemImage: drag.width >= 0 ? "checkmark" : "xmark")
+            .overlay(alignment: keepingDirection ? .topLeading : .topTrailing) {
+                Label(keepingDirection ? "KEEP" : "DISCARD", systemImage: keepingDirection ? "checkmark" : "xmark")
                     .font(.title3.bold()).foregroundStyle(decisionColor)
                     .padding(12).background(.regularMaterial, in: .capsule).padding(28)
                     .opacity(index == 0 ? decisionProgress : 0)
@@ -357,6 +358,7 @@ private struct RecipeDiscoveryStack: View {
                         }
                         if horizontalDrag == true {
                             if !isSwiping { isSwiping = true }
+                            if value.translation.width != 0 { keepingDirection = value.translation.width > 0 }
                             drag = CGSize(width: value.translation.width, height: 0)
                         }
                     }
