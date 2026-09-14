@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RecipeCardView: View {
     let recipe: Recipe
+    var transition: RecipeTransitionSource? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -9,6 +10,7 @@ struct RecipeCardView: View {
                 .aspectRatio(1, contentMode: .fit)
                 .overlay { RecipeImage(data: recipe.imageData) }
                 .clipShape(.rect(cornerRadius: 22))
+                .modifier(RecipeZoomSource(source: transition))
                 .overlay(alignment: .bottomTrailing) {
                     if !recipe.reactions.isEmpty {
                         HStack(spacing: 2) {

@@ -6,6 +6,7 @@ struct IngredientListEditor: View {
     let sourceURL: URL?
     @State private var editing: Ingredient?
     @State private var recoveringGroups = false
+    @State private var formatting = false
 
     var body: some View {
         List {
@@ -22,14 +23,24 @@ struct IngredientListEditor: View {
                                 Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
                             }
                             if !ingredient.group.isEmpty {
-                                Text(ingredient.group).font(.caption).foregroundStyle(.secondary).padding(.leading, 37)
+                                Text(ingredient.group).font(.caption).foregroundStyle(.secondary).padding(.leading, 45)
                             }
                         }
                     }.buttonStyle(.plain)
                 }
                 .onDelete { ingredients.remove(atOffsets: $0) }
                 .onMove { ingredients.move(fromOffsets: $0, toOffset: $1) }
-            } header: { Text("\(ingredients.count) ingredients") } footer: {
+            } header: {
+                HStack {
+                    Text("\(ingredients.count) ingredients")
+                    Spacer()
+                    if !ingredients.isEmpty {
+                        Button("Auto format", systemImage: "sparkles") { formatting = true }
+                            .font(.caption).textCase(nil).buttonStyle(.borderless)
+                            .accessibilityIdentifier("autoFormatIngredients")
+                    }
+                }
+            } footer: {
                 Text(ingredients.isEmpty ? "Add ingredients one at a time. Quantities, groups and shopping categories are optional." : "Tap an ingredient to edit it. Tap Edit to reorder or remove ingredients.")
             }
             if let sourceURL, ["https", "http"].contains(sourceURL.scheme ?? ""), !ingredients.isEmpty {
@@ -48,6 +59,7 @@ struct IngredientListEditor: View {
             }
         }
         .sheet(isPresented: $recoveringGroups) { GroupRecoveryView(ingredients: $ingredients, sourceURL: sourceURL) }
+        .sheet(isPresented: $formatting) { IngredientFormattingView(ingredients: $ingredients) }
     }
 }
 
@@ -179,6 +191,7 @@ struct DraftCollectionsEditor: View {
 struct RecipeTagsEditor: View {
     @Binding var tagsText: String
     let draft: RecipeDraft
+    var title = "Tags"
     @State private var suggestions: [String] = []
     @State private var busy = false
     @State private var task: Task<Void, Never>?
@@ -187,6 +200,7 @@ struct RecipeTagsEditor: View {
         Form {
             Section {
                 TextField("e.g. Easy, Dinner, Vegetarian", text: $tagsText, axis: .vertical).lineLimit(2...6)
+                    .accessibilityIdentifier("recipeTagsText")
             } header: { Text("Tags") } footer: { Text("Separate tags with commas. Use them to find recipes in Search.") }
             Section {
                 if busy {
@@ -201,7 +215,7 @@ struct RecipeTagsEditor: View {
                     }
                 }
             }
-        }.navigationTitle("Tags").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(title).navigationBarTitleDisplayMode(.inline)
             .onDisappear { task?.cancel() }.supperError($error, title: "Tag suggestions")
     }
     private func suggest() {

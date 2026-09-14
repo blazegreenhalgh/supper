@@ -6,7 +6,8 @@ struct RecipeLibraryView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var filter: RecipeFilter
     var isSearch = false
-    let openRecipe: (UUID) -> Void
+    let transition: Namespace.ID
+    let openRecipe: (RecipeRoute) -> Void
     @State private var showingAddRecipe = false
     @State private var showingCollections = false
     @State private var showingHousehold = false
@@ -58,7 +59,7 @@ struct RecipeLibraryView: View {
                                     }.buttonStyle(.plain).padding(.horizontal, 20)
                                     ScrollView(.horizontal, showsIndicators: false) {
                                         LazyHStack(alignment: .top, spacing: 16) {
-                                            ForEach(recipes) { recipe in recipeLink(recipe).frame(width: dynamicTypeSize.isAccessibilitySize ? 280 : 174) }
+                                            ForEach(recipes) { recipe in recipeLink(recipe, section: collection.id.uuidString).frame(width: dynamicTypeSize.isAccessibilitySize ? 280 : 174) }
                                         }.padding(.horizontal, 20)
                                     }
                                 }
@@ -99,11 +100,14 @@ struct RecipeLibraryView: View {
         .sheet(isPresented: $showingDiscovery) { RecipeDiscoveryView(model: discovery) }
         .sheet(isPresented: $showingCollections) { CollectionsView() }
         .sheet(isPresented: $showingHousehold) { HouseholdSettingsView() }
-        .sheet(isPresented: $showingPicker) { PickRecipeView(recipes: filteredRecipes) { id in showingPicker = false; openRecipe(id) } }
+        .sheet(isPresented: $showingPicker) { PickRecipeView(recipes: filteredRecipes) { id in showingPicker = false; openRecipe(RecipeRoute(recipeID: id)) } }
         .sheet(isPresented: $showingSearchAssistant) { SearchAssistanceView(initialQuery: filter.query, collections: store.collections, tags: allTags) { filter = $0; showingSearchAssistant = false } }
     }
-    private func recipeLink(_ recipe: Recipe) -> some View {
-        NavigationLink(value: recipe.id) { RecipeCardView(recipe: recipe) }.buttonStyle(.plain)
+    private func recipeLink(_ recipe: Recipe, section: String = "all") -> some View {
+        let route = RecipeRoute(recipeID: recipe.id, section: section)
+        return NavigationLink(value: route) {
+            RecipeCardView(recipe: recipe, transition: RecipeTransitionSource(id: route.sourceID, namespace: transition))
+        }.buttonStyle(.plain)
             .transition(.opacity)
             .accessibilityIdentifier(recipe.title == "Chicken with rice" ? "recipe-test-chicken" : "recipe-" + recipe.id.uuidString)
     }

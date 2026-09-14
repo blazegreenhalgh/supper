@@ -45,6 +45,9 @@
 		DA2000000000000000000001 /* RecipeDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1000000000000000000001; };
 		DA2000000000000000000002 /* RecipeDiscoveryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1000000000000000000002; };
 		DA2000000000000000000003 /* RecipeDiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1000000000000000000003; };
+		5BA1DF8F4BF7440DAAEB982F /* IngredientFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = E35C2BF08DA5F6AE68DF0B5D /* IngredientFormatting.swift */; };
+		2FBCDBAF7834E5ACBBC9080E /* IngredientFormattingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A022CFE305EA0D10642F99 /* IngredientFormattingView.swift */; };
+		C756695F354DE8DAB7DAF44B /* RecipeTagsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 912689FE4E8AE2202548D2A9 /* RecipeTagsSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -91,6 +94,9 @@
 		DA1000000000000000000001 /* RecipeDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Domain/RecipeDiscovery.swift"; sourceTree = SOURCE_ROOT; };
 		DA1000000000000000000002 /* RecipeDiscoveryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Services/RecipeDiscoveryService.swift"; sourceTree = SOURCE_ROOT; };
 		DA1000000000000000000003 /* RecipeDiscoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/UI/Recipes/RecipeDiscoveryView.swift"; sourceTree = SOURCE_ROOT; };
+		E35C2BF08DA5F6AE68DF0B5D /* IngredientFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Domain/IngredientFormatting.swift"; sourceTree = SOURCE_ROOT; };
+		73A022CFE305EA0D10642F99 /* IngredientFormattingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/UI/AddRecipe/IngredientFormattingView.swift"; sourceTree = SOURCE_ROOT; };
+		912689FE4E8AE2202548D2A9 /* RecipeTagsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/UI/Recipes/RecipeTagsSheet.swift"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -111,6 +117,9 @@
 			DA1000000000000000000003,
 			DA1000000000000000000002,
 			DA1000000000000000000001,
+			912689FE4E8AE2202548D2A9 /* RecipeTagsSheet.swift */,
+			73A022CFE305EA0D10642F99 /* IngredientFormattingView.swift */,
+			E35C2BF08DA5F6AE68DF0B5D /* IngredientFormatting.swift */,
 			13B27DAFBFCDC5F5BB6DCFBC /* RecipeAssistanceView.swift */,
 			E30B6A9D1535D088D2DB8A3A /* HouseholdSettingsView.swift */,
 			27F605738E18021FC378F701 /* CollectionsView.swift */,
@@ -205,6 +214,9 @@
 			DA2000000000000000000003,
 			DA2000000000000000000002,
 			DA2000000000000000000001,
+			C756695F354DE8DAB7DAF44B /* RecipeTagsSheet.swift in Sources */,
+			2FBCDBAF7834E5ACBBC9080E /* IngredientFormattingView.swift in Sources */,
+			5BA1DF8F4BF7440DAAEB982F /* IngredientFormatting.swift in Sources */,
 			EF0000000000000000000002 /* RecipeContentEditors.swift in Sources */,
 			EF0000000000000000000001 /* RecipeFilterChips.swift in Sources */,
 			562AE1C5D8E80F67996EE0E4 /* RecipeAssistanceView.swift in Sources */,

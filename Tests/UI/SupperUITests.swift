@@ -13,6 +13,18 @@ import XCTest
         XCTAssertTrue(card.waitForExistence(timeout: 5))
         capture(app, "Discovery recipe stack")
         card.tap()
+        app.buttons["recipeTags"].tap()
+        app.buttons["addMoreTags"].tap()
+        let tagField = app.textFields["recipeTagsText"]
+        let tagInput = tagField.exists ? tagField : app.textViews["recipeTagsText"]
+        XCTAssertTrue(tagInput.waitForExistence(timeout: 5))
+        tagInput.tap(); tagInput.typeText("Weeknight")
+        app.buttons["confirmNewTags"].tap()
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["recipeTags"].waitForExistence(timeout: 5))
+        app.buttons["recipeTags"].tap()
+        XCTAssertTrue(app.staticTexts["Weeknight"].waitForExistence(timeout: 5))
+        app.buttons["Cancel"].tap()
         app.buttons["editRecipe"].tap()
         let name = app.textFields["Recipe name"]
         XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText(" edited")
@@ -67,14 +79,17 @@ import XCTest
         XCTAssertEqual(XCTWaiter.wait(for: [match], timeout: 5), .completed)
     }
 
-    private func launch() -> XCUIApplication {
-        let app = XCUIApplication(); app.launchArguments = ["--ui-testing"]; app.launch()
+    private func launch(dark: Bool = false) -> XCUIApplication {
+        let app = XCUIApplication(); app.launchArguments = ["--ui-testing"]
+        if dark { app.launchArguments.append("--ui-testing-dark") }
+        app.launch()
         XCTAssertTrue(app.buttons["recipe-test-chicken"].waitForExistence(timeout: 15))
         return app
     }
     private func openRecipe(_ app: XCUIApplication) {
         app.buttons["recipe-test-chicken"].tap()
         XCTAssertTrue(app.buttons["editRecipe"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["recipeTags"].waitForExistence(timeout: 5))
     }
     private func capture(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
@@ -147,15 +162,19 @@ import XCTest
         quantity.tap(); quantity.typeText("2")
         capture(app, "Labeled ingredient editor")
         app.buttons["saveIngredient"].tap()
-        XCTAssertTrue(app.staticTexts["Lime wedges"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["2 Lime wedges"].waitForExistence(timeout: 5))
         capture(app, "Ingredient editing list")
         app.navigationBars.buttons.element(boundBy: 0).tap()
         app.buttons["Save"].tap()
         XCTAssertTrue(app.buttons["editRecipe"].waitForExistence(timeout: 5))
         app.swipeUp()
-        XCTAssertTrue(app.staticTexts["Lime wedges"].waitForExistence(timeout: 5))
-        capture(app, "Ingredient amounts at the trailing edge")
+        XCTAssertTrue(app.staticTexts["2 Lime wedges"].waitForExistence(timeout: 5))
+        capture(app, "Inline bold ingredient amounts")
         app.segmentedControls.buttons["Method"].tap()
+        XCTAssertTrue(app.staticTexts["Cook the chicken."].exists)
+        XCTAssertTrue(app.staticTexts["Serve with rice."].exists)
+        XCTAssertFalse(app.buttons["Previous"].exists)
+        capture(app, "Expanded method steps")
         app.buttons["fullScreenMethod"].tap()
         XCTAssertTrue(app.buttons["closeFullScreenMethod"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["previousFullScreenStep"].isEnabled)
@@ -166,6 +185,70 @@ import XCTest
         app.buttons["previousFullScreenStep"].tap()
         app.buttons["closeFullScreenMethod"].tap()
         XCTAssertTrue(app.buttons["fullScreenMethod"].waitForExistence(timeout: 5))
+    }
+
+
+    func testFormattingReviewCancelAndDraftOnlyApply() {
+        let app = launch(); openRecipe(app)
+        app.buttons["editRecipe"].tap()
+        app.buttons["editIngredients"].tap()
+        app.buttons["addIngredient"].tap()
+        let name = app.textFields["ingredientName"]
+        let field = name.exists ? name : app.textViews["ingredientName"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap(); field.typeText("1 lb / 500g BEEF MINCE ((fresh))")
+        app.buttons["saveIngredient"].tap()
+        app.buttons["autoFormatIngredients"].tap()
+        XCTAssertTrue(app.buttons["applyIngredientFormatting"].waitForExistence(timeout: 10))
+        let apply = app.buttons["applyIngredientFormatting"]
+        let ready = NSPredicate(format: "enabled == true")
+        expectation(for: ready, evaluatedWith: apply)
+        waitForExpectations(timeout: 20)
+        capture(app, "Ingredient formatting review")
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.staticTexts["1 lb / 500g BEEF MINCE ((fresh))"].exists)
+        app.buttons["autoFormatIngredients"].tap()
+        expectation(for: ready, evaluatedWith: app.buttons["applyIngredientFormatting"])
+        waitForExpectations(timeout: 20)
+        app.buttons["applyIngredientFormatting"].tap()
+        XCTAssertTrue(app.staticTexts["500 g Beef mince (fresh)"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["Cancel"].tap()
+        app.swipeUp()
+        XCTAssertFalse(app.staticTexts["500 g Beef mince (fresh)"].exists)
+    }
+
+    func testTagsSheetAndSimpleGrocerySelection() {
+        let app = launch(dark: true); openRecipe(app)
+        XCTAssertFalse(app.staticTexts["Easy"].exists)
+        app.buttons["recipeTags"].tap()
+        XCTAssertTrue(app.staticTexts["Easy"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["addMoreTags"].exists)
+        capture(app, "Recipe tags sheet")
+        app.buttons["addMoreTags"].tap()
+        let tagField = app.textFields["recipeTagsText"]
+        let tagInput = tagField.exists ? tagField : app.textViews["recipeTagsText"]
+        XCTAssertTrue(tagInput.waitForExistence(timeout: 5))
+        tagInput.tap(); tagInput.typeText("Weeknight")
+        XCTAssertEqual(tagInput.value as? String, "Weeknight")
+        app.buttons["confirmNewTags"].tap()
+        XCTAssertTrue(app.staticTexts["Weeknight"].waitForExistence(timeout: 5), app.debugDescription)
+        capture(app, "Tags ready to save")
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["recipeTags"].waitForExistence(timeout: 5))
+        app.buttons["recipeTags"].tap()
+        XCTAssertTrue(app.staticTexts["Weeknight"].waitForExistence(timeout: 5), app.debugDescription)
+        app.buttons["Cancel"].tap()
+        app.buttons["Recipe options"].tap()
+        app.buttons["recipeMenuAddToGroceries"].tap()
+        XCTAssertTrue(app.navigationBars["Add to Groceries"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'ingredients selected'")).firstMatch.exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Quantities for'")).firstMatch.exists)
+        let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'groceryIngredient-'")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertEqual(row.value as? String, "Selected")
+        row.tap(); XCTAssertEqual(row.value as? String, "Not selected")
+        capture(app, "Simple grocery checkboxes")
     }
 
     func testHomepageActionsAndActiveFilters() {

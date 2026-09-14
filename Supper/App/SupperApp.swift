@@ -9,12 +9,21 @@ struct SupperApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .tint(Color(uiColor: .systemBlue))
+                .preferredColorScheme(uiTestColorScheme)
                 .environmentObject(store)
                 .task { await store.load() }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active, store.isReady { Task { await store.checkCloudAccount() } }
                 }
         }
+    }
+    private var uiTestColorScheme: ColorScheme? {
+        #if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("--ui-testing") && arguments.contains("--ui-testing-dark") { return .dark }
+        #endif
+        return nil
     }
 }
 

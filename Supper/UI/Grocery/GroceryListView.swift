@@ -175,20 +175,16 @@ private struct GroceryRow: View {
             do { try store.toggleGroceryItem(item) }
             catch { store.errorMessage = error.localizedDescription }
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: 20) {
                 IngredientIcon(name: item.name)
                     .opacity(item.isChecked ? 0.5 : 1)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(item.name)
+                    let amount = [item.quantity, item.unit].filter { !$0.isEmpty }.joined(separator: " ")
+                    Text("\(Text(amount).bold())\(amount.isEmpty ? "" : " ")\(item.name)")
+                        .font(.callout).lineSpacing(3)
                         .strikethrough(item.isChecked)
                         .foregroundStyle(item.isChecked ? .secondary : .primary)
                         .fixedSize(horizontal: false, vertical: true)
-                    let amount = [item.quantity, item.unit].filter { !$0.isEmpty }.joined(separator: " ")
-                    if !amount.isEmpty {
-                        Text(amount)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
                     if !recipeNames.isEmpty {
                         Text(recipeNames)
                             .font(.caption)
