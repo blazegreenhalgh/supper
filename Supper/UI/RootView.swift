@@ -24,6 +24,7 @@ struct RootView: View {
                         .navigationDestination(for: UUID.self) { RecipeDetailView(recipeID: $0) }
                 }
                 .searchable(text: $searchFilter.query, prompt: "Recipes, ingredients, tags or collections")
+                .searchPresentationToolbarBehavior(.avoidHidingContent)
             }
         }
         .overlay {
