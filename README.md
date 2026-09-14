@@ -41,6 +41,10 @@ Pushes to `main` trigger Xcode Cloud builds and deliver successful archives to t
 internal TestFlight **Testing** group. See [TestFlight and Xcode Cloud](docs/testflight.md)
 for the workflow, tester instructions, and verification details.
 
-## AI import direction
+## On-device recipe assistance
 
-URL import first uses structured `Recipe` JSON-LD because it is deterministic and cheap. Apple Foundation Models can then be used as a cleanup/fallback layer for messy pages, screenshots and cookbook photos. The service boundary is already separated so that can be added without changing the UI.
+URL import prefers structured `Recipe` metadata and explicit ingredient headings. Vision recognizes recipe text in photos; Foundation Models can structure unstructured text, suggest tags, interpret searches and tidy ingredient names when Apple Intelligence is available. Manual capture and deterministic import remain available offline, without an API key.
+
+In the recipe editor, open Ingredients → Auto format to review sentence case, repaired brackets and recovered quantity/unit fields. Weight extraction uses source values, never model arithmetic. Existing amounts win; package sizes and conflicts remain readable. Model output cannot add or drop ingredient words, change quantities or replace IDs, groups or categories. Apply changes only the editor draft; Save commits the recipe.
+
+`swift test` covers formatting, quantities, merging, groups, editing, filtering, identity and persistence migration. The iOS UI suite covers native navigation/search, formatting review/cancel, tags, grocery selection and full-screen method. Foundation Models generation itself also needs a supported physical device with Apple Intelligence enabled; simulator tests exercise the deterministic fallback.

@@ -199,6 +199,7 @@ struct RecipeTagsEditor: View {
         Form {
             Section {
                 TextField("e.g. Easy, Dinner, Vegetarian", text: $tagsText, axis: .vertical).lineLimit(2...6)
+                    .accessibilityIdentifier("recipeTagsText")
             } header: { Text("Tags") } footer: { Text("Separate tags with commas. Use them to find recipes in Search.") }
             Section {
                 if busy {

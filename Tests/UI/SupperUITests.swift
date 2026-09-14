@@ -147,6 +147,16 @@ import XCTest
         XCTAssertTrue(app.staticTexts["Easy"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["addMoreTags"].exists)
         capture(app, "Recipe tags sheet")
+        app.buttons["addMoreTags"].tap()
+        let tagField = app.textFields["recipeTagsText"]
+        let tagInput = tagField.exists ? tagField : app.textViews["recipeTagsText"]
+        XCTAssertTrue(tagInput.waitForExistence(timeout: 5))
+        tagInput.tap(); tagInput.typeText(", Weeknight")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["recipeTags"].waitForExistence(timeout: 5))
+        app.buttons["recipeTags"].tap()
+        XCTAssertTrue(app.staticTexts["Weeknight"].waitForExistence(timeout: 5))
         app.buttons["Cancel"].tap()
         app.buttons["Recipe options"].tap()
         app.buttons["Add to groceries"].tap()
