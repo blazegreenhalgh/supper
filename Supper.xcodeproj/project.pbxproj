@@ -42,6 +42,9 @@
 		DD0000000000000000000004 = {isa = PBXBuildFile; fileRef = DD0000000000000000000003; };
 		EF0000000000000000000001 /* RecipeFilterChips.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0000000000000000000001 /* RecipeFilterChips.swift */; };
 		EF0000000000000000000002 /* RecipeContentEditors.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0000000000000000000002 /* RecipeContentEditors.swift */; };
+		DA2000000000000000000001 /* RecipeDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1000000000000000000001; };
+		DA2000000000000000000002 /* RecipeDiscoveryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1000000000000000000002; };
+		DA2000000000000000000003 /* RecipeDiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1000000000000000000003; };
 		5BA1DF8F4BF7440DAAEB982F /* IngredientFormatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = E35C2BF08DA5F6AE68DF0B5D /* IngredientFormatting.swift */; };
 		2FBCDBAF7834E5ACBBC9080E /* IngredientFormattingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73A022CFE305EA0D10642F99 /* IngredientFormattingView.swift */; };
 		C756695F354DE8DAB7DAF44B /* RecipeTagsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 912689FE4E8AE2202548D2A9 /* RecipeTagsSheet.swift */; };
@@ -88,6 +91,9 @@
 		DD0000000000000000000002 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = SupperUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		EE0000000000000000000001 /* RecipeFilterChips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RecipeFilterChips.swift"; sourceTree = "<group>"; };
 		EE0000000000000000000002 /* RecipeContentEditors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RecipeContentEditors.swift"; sourceTree = "<group>"; };
+		DA1000000000000000000001 /* RecipeDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Domain/RecipeDiscovery.swift"; sourceTree = SOURCE_ROOT; };
+		DA1000000000000000000002 /* RecipeDiscoveryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Services/RecipeDiscoveryService.swift"; sourceTree = SOURCE_ROOT; };
+		DA1000000000000000000003 /* RecipeDiscoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/UI/Recipes/RecipeDiscoveryView.swift"; sourceTree = SOURCE_ROOT; };
 		E35C2BF08DA5F6AE68DF0B5D /* IngredientFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Domain/IngredientFormatting.swift"; sourceTree = SOURCE_ROOT; };
 		73A022CFE305EA0D10642F99 /* IngredientFormattingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/UI/AddRecipe/IngredientFormattingView.swift"; sourceTree = SOURCE_ROOT; };
 		912689FE4E8AE2202548D2A9 /* RecipeTagsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/UI/Recipes/RecipeTagsSheet.swift"; sourceTree = SOURCE_ROOT; };
@@ -108,6 +114,9 @@
 		BF7A2D27A78D590BDEF15AF2 /* Products */ = {isa = PBXGroup; children = (DD0000000000000000000002,A97C29AD63741CF438998CE6 /* Supper - Shared Cookbook.app */,); name = Products; sourceTree = "<group>"; };
 		BD13AA3ACFF3D0C2ED6E4720 /* Config */ = {isa = PBXGroup; children = (188BDC112B00A615FE505EDD /* App.xcconfig */,); path = Config; sourceTree = "<group>"; };
 		E98CA76C287370E0E9D02D75 /* Supper */ = {isa = PBXGroup; children = (
+			DA1000000000000000000003,
+			DA1000000000000000000002,
+			DA1000000000000000000001,
 			912689FE4E8AE2202548D2A9 /* RecipeTagsSheet.swift */,
 			73A022CFE305EA0D10642F99 /* IngredientFormattingView.swift */,
 			E35C2BF08DA5F6AE68DF0B5D /* IngredientFormatting.swift */,
@@ -202,6 +211,9 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		E7209FB05162B7572F88D05E /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+			DA2000000000000000000003,
+			DA2000000000000000000002,
+			DA2000000000000000000001,
 			C756695F354DE8DAB7DAF44B /* RecipeTagsSheet.swift in Sources */,
 			2FBCDBAF7834E5ACBBC9080E /* IngredientFormattingView.swift in Sources */,
 			5BA1DF8F4BF7440DAAEB982F /* IngredientFormatting.swift in Sources */,

@@ -1,6 +1,84 @@
 import XCTest
 
 @MainActor final class SupperUITests: XCTestCase {
+    func testDiscoveryEditsStayDraftUntilKeptAndGridSharesDecisions() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--discovery-ui-testing"]
+        app.launch()
+        XCTAssertTrue(app.buttons["openRecipeDiscovery"].waitForExistence(timeout: 15))
+        app.buttons["openRecipeDiscovery"].tap()
+        app.buttons["A cosy one-pot dinner"].tap()
+        app.buttons["findDiscoveryRecipes"].tap()
+        let card = app.buttons["discoveryTopCard"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        capture(app, "Discovery recipe stack")
+        card.tap()
+        app.buttons["recipeTags"].tap()
+        app.buttons["addMoreTags"].tap()
+        let tagField = app.textFields["recipeTagsText"]
+        let tagInput = tagField.exists ? tagField : app.textViews["recipeTagsText"]
+        XCTAssertTrue(tagInput.waitForExistence(timeout: 5))
+        tagInput.tap(); tagInput.typeText("Weeknight")
+        app.buttons["confirmNewTags"].tap()
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["recipeTags"].waitForExistence(timeout: 5))
+        app.buttons["recipeTags"].tap()
+        XCTAssertTrue(app.staticTexts["Weeknight"].waitForExistence(timeout: 5))
+        app.buttons["Cancel"].tap()
+        app.buttons["editRecipe"].tap()
+        let name = app.textFields["Recipe name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText(" edited")
+        app.buttons["Done"].firstMatch.tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        expectDiscoveryCard(app, title: "Lemon chicken bowls edited")
+        app.buttons["closeDiscovery"].tap()
+        XCTAssertFalse(app.staticTexts["Lemon chicken bowls edited"].exists)
+        app.buttons["openRecipeDiscovery"].tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        app.swipeUp()
+        app.buttons["keepDiscoveryRecipe"].tap()
+        expectDiscoveryCard(app, title: "Creamy mushroom pasta")
+        app.buttons["discoveryLayout"].tap()
+        XCTAssertTrue(app.buttons["Discard Creamy mushroom pasta"].waitForExistence(timeout: 5))
+        capture(app, "Discovery grid")
+        app.buttons["Discard Creamy mushroom pasta"].tap()
+        XCTAssertFalse(app.staticTexts["Creamy mushroom pasta"].exists)
+        app.buttons["discoveryLayout"].tap()
+        app.buttons["undoDiscoveryDiscard"].tap()
+        expectDiscoveryCard(app, title: "Creamy mushroom pasta")
+        app.buttons["closeDiscovery"].tap()
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["Lemon chicken bowls edited"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Creamy mushroom pasta"].exists)
+    }
+
+    func testDiscoverySwipeDiscardsAndKeeps() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--discovery-ui-testing"]
+        app.launch()
+        XCTAssertTrue(app.buttons["openRecipeDiscovery"].waitForExistence(timeout: 15))
+        app.buttons["openRecipeDiscovery"].tap()
+        app.buttons["A cosy one-pot dinner"].tap()
+        app.buttons["findDiscoveryRecipes"].tap()
+        let card = app.buttons["discoveryTopCard"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        card.swipeLeft()
+        expectDiscoveryCard(app, title: "Creamy mushroom pasta")
+        card.swipeRight()
+        expectDiscoveryCard(app, title: "Crispy chickpea wraps")
+        app.buttons["closeDiscovery"].tap()
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["Creamy mushroom pasta"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Lemon chicken bowls"].exists)
+    }
+
+    private func expectDiscoveryCard(_ app: XCUIApplication, title: String) {
+        let card = app.buttons["discoveryTopCard"]
+        let match = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", title), object: card)
+        XCTAssertEqual(XCTWaiter.wait(for: [match], timeout: 5), .completed)
+    }
+
     private func launch(dark: Bool = false) -> XCUIApplication {
         let app = XCUIApplication(); app.launchArguments = ["--ui-testing"]
         if dark { app.launchArguments.append("--ui-testing-dark") }
