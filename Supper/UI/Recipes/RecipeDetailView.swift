@@ -5,6 +5,7 @@ struct RecipeDetailView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let recipeID: UUID
+    private var preview: Binding<Recipe>?
     @State private var showingIngredients = false
     @State private var showingEditor = false
     @State private var showingCollections = false
@@ -12,7 +13,10 @@ struct RecipeDetailView: View {
     @State private var selectedServings: Int?
     @State private var section = "Ingredients"
     @State private var byShoppingCategory = false
-    private var recipe: Recipe? { store.recipes.first { $0.id == recipeID } }
+    private var recipe: Recipe? { preview?.wrappedValue ?? store.recipes.first { $0.id == recipeID } }
+
+    init(recipeID: UUID) { self.recipeID = recipeID; preview = nil }
+    init(preview: Binding<Recipe>) { recipeID = preview.wrappedValue.id; self.preview = preview }
 
     var body: some View {
         Group {
@@ -46,7 +50,7 @@ struct RecipeDetailView: View {
                             if !recipe.notes.isEmpty {
                                 DisclosureGroup("Notes") { Text(recipe.notes).foregroundStyle(.secondary).textSelection(.enabled).padding(.top, 10) }.tint(.primary)
                             }
-                            if !recipe.ingredients.isEmpty {
+                            if preview == nil && !recipe.ingredients.isEmpty {
                                 Button { showingIngredients = true } label: {
                                     Label("Add to groceries", systemImage: "cart.badge.plus").frame(maxWidth: .infinity)
                                 }.supperGlassButton(prominent: true).controlSize(.large)
@@ -69,20 +73,35 @@ struct RecipeDetailView: View {
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) { Button("Edit") { showingEditor = true }.accessibilityIdentifier("editRecipe") }
                     ToolbarItem(placement: .topBarTrailing) {
-                        Menu("Recipe options", systemImage: "ellipsis") {
-                            Button("Collections", systemImage: "folder") { showingCollections = true }
-                            if !recipe.ingredients.isEmpty {
-                                Button("Add to groceries", systemImage: "cart.badge.plus") { showingIngredients = true }
-                                    .accessibilityIdentifier("recipeMenuAddToGroceries")
+                        if preview == nil {
+                            Menu("Recipe options", systemImage: "ellipsis") {
+                                Button("Collections", systemImage: "folder") { showingCollections = true }
+                                if !recipe.ingredients.isEmpty {
+                                    Button("Add to groceries", systemImage: "cart.badge.plus") { showingIngredients = true }
+                                        .accessibilityIdentifier("recipeMenuAddToGroceries")
+                                }
+                                if let url = recipe.sourceURL { ShareLink(item: url) }
                             }
-                            if let url = recipe.sourceURL { ShareLink(item: url) }
                         }
                     }
                 }
-                .sheet(isPresented: $showingEditor) { AddRecipeView(recipe: recipe) }
+                .sheet(isPresented: $showingEditor) {
+                    if let preview { AddRecipeView(recipe: recipe, onSaveDraft: { preview.wrappedValue = $0 }) }
+                    else { AddRecipeView(recipe: recipe) }
+                }
                 .sheet(isPresented: $showingIngredients) { AddIngredientsToGroceryView(recipe: recipe, servings: selectedServings ?? recipe.servings) }
                 .sheet(isPresented: $showingCollections) { CollectionMembershipView(recipe: recipe) }
-                .sheet(isPresented: $showingTags) { RecipeTagsSheet(recipe: recipe).presentationDetents([.medium, .large]).presentationDragIndicator(.visible) }
+                .sheet(isPresented: $showingTags) {
+                    Group {
+                        if let preview {
+                            RecipeTagsSheet(recipe: recipe, onSaveTags: { tags in
+                                var edited = preview.wrappedValue
+                                edited.tags = tags
+                                preview.wrappedValue = edited
+                            })
+                        } else { RecipeTagsSheet(recipe: recipe) }
+                    }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+                }
                 .onAppear { if selectedServings == nil { selectedServings = recipe.servings } }
                 .onChange(of: recipe.servings) { _, value in selectedServings = value }
             } else { ContentUnavailableView("Recipe unavailable", systemImage: "fork.knife") }
@@ -97,7 +116,9 @@ struct RecipeDetailView: View {
                         .frame(height: 85).allowsHitTesting(false)
                 }
             }
-            .overlay(alignment: .bottomTrailing) { RecipeReactionControl(recipe: recipe).padding(.trailing, 20).padding(.bottom, 40) }
+            .overlay(alignment: .bottomTrailing) {
+                if preview == nil { RecipeReactionControl(recipe: recipe).padding(.trailing, 20).padding(.bottom, 40) }
+            }
             .accessibilityIdentifier("recipeHero")
     }
     @ViewBuilder private func servings(_ recipe: Recipe) -> some View {

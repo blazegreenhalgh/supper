@@ -29,6 +29,11 @@ struct SupperApp: App {
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--discovery-ui-testing") {
+            UserDefaults.standard.set(false, forKey: "discoveryGridView")
+        }
+        #endif
         if RecipeStore.shared.persistence.cloudEnabled { application.registerForRemoteNotifications() }
         return true
     }

@@ -4,14 +4,16 @@ struct RecipeTagsSheet: View {
     @EnvironmentObject private var store: RecipeStore
     @Environment(\.dismiss) private var dismiss
     let recipe: Recipe
+    private let onSaveTags: (([String]) -> Void)?
     @State private var tagsText: String
     @State private var householdID: UUID?
     @State private var error: String?
     @State private var addingTags = false
     @State private var newTagsText = ""
 
-    init(recipe: Recipe) {
+    init(recipe: Recipe, onSaveTags: (([String]) -> Void)? = nil) {
         self.recipe = recipe
+        self.onSaveTags = onSaveTags
         _tagsText = State(initialValue: recipe.tags.joined(separator: ", "))
     }
     private var tags: [String] {
@@ -40,8 +42,13 @@ struct RecipeTagsSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button(onSaveTags == nil ? "Save" : "Done") {
                         do {
+                            if let onSaveTags {
+                                onSaveTags(tags)
+                                dismiss()
+                                return
+                            }
                             guard householdID == store.activeHouseholdID,
                                   var latest = store.recipes.first(where: { $0.id == recipe.id }) else {
                                 throw SupperError.invalid("Switch back to this recipe’s household before saving your tags.")
