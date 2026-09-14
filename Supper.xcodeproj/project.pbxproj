@@ -40,6 +40,8 @@
 		1AC275DAAFE5CE3EA7B63B24 /* HouseholdSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30B6A9D1535D088D2DB8A3A /* HouseholdSettingsView.swift */; };
 		562AE1C5D8E80F67996EE0E4 /* RecipeAssistanceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13B27DAFBFCDC5F5BB6DCFBC /* RecipeAssistanceView.swift */; };
 		DD0000000000000000000004 = {isa = PBXBuildFile; fileRef = DD0000000000000000000003; };
+		EF0000000000000000000001 /* RecipeFilterChips.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0000000000000000000001 /* RecipeFilterChips.swift */; };
+		EF0000000000000000000002 /* RecipeContentEditors.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE0000000000000000000002 /* RecipeContentEditors.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -81,6 +83,8 @@
 		13B27DAFBFCDC5F5BB6DCFBC /* RecipeAssistanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/UI/AddRecipe/RecipeAssistanceView.swift"; sourceTree = SOURCE_ROOT; };
 		DD0000000000000000000003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/UI/SupperUITests.swift; sourceTree = SOURCE_ROOT; };
 		DD0000000000000000000002 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = SupperUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		EE0000000000000000000001 /* RecipeFilterChips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RecipeFilterChips.swift"; sourceTree = "<group>"; };
+		EE0000000000000000000002 /* RecipeContentEditors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RecipeContentEditors.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -148,6 +152,7 @@
 			D415DE9CB3842542DE861838,
 		); path = Components; sourceTree = "<group>"; };
 		89369CBEFFFF5DB3519F7B14 /* Recipes */ = {isa = PBXGroup; children = (
+			EE0000000000000000000001 /* RecipeFilterChips.swift */,
 			ECE4F31321D68BA88870E884,
 			59E7FFC7D45F478E8D4D9A2A,
 			DA0199CC4B245F79A06C5982,
@@ -157,6 +162,7 @@
 			C4ED9FBA7ECA0194AECFE17B,
 		); path = Grocery; sourceTree = "<group>"; };
 		ED364176CFF719DA21C644ED /* AddRecipe */ = {isa = PBXGroup; children = (
+			EE0000000000000000000002 /* RecipeContentEditors.swift */,
 			43D0A3809485F123AB8309C7,
 			6F19D58096A8986B829F53A4,
 		); path = AddRecipe; sourceTree = "<group>"; };
@@ -187,6 +193,8 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		E7209FB05162B7572F88D05E /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+			EF0000000000000000000002 /* RecipeContentEditors.swift in Sources */,
+			EF0000000000000000000001 /* RecipeFilterChips.swift in Sources */,
 			562AE1C5D8E80F67996EE0E4 /* RecipeAssistanceView.swift in Sources */,
 			1AC275DAAFE5CE3EA7B63B24 /* HouseholdSettingsView.swift in Sources */,
 			D6146A8527F6758A01BD5A76 /* CollectionsView.swift in Sources */,
