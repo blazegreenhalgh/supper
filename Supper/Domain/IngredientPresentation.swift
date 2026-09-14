@@ -39,6 +39,7 @@ public struct IngredientPresentation: Equatable, Sendable {
         Rule(["coconut milk", "coconut cream", "almond milk", "oat milk"], "🥥", .pantry),
         Rule(["tomato paste", "tomato puree", "tomato sauce", "crushed tomatoes", "crushed tomato", "canned tomatoes", "tinned tomatoes", "passata"], "🥫", .pantry),
         Rule(["chilli powder", "chili powder", "cayenne", "paprika", "cumin", "curry powder", "turmeric", "cinnamon", "nutmeg", "garlic powder", "onion powder", "peppercorns", "black pepper", "white pepper"], "🌶️", .pantry),
+        Rule(["dried oregano", "dried basil", "dried thyme", "dried rosemary", "dried parsley", "dried herbs"], "🌿", .pantry),
         Rule(["stock", "bouillon", "broth"], "🥣", .pantry),
         Rule(["oil", "olives", "olive"], "🫒", .pantry),
         Rule(["vinegar", "soy sauce", "fish sauce", "oyster sauce", "worcestershire", "ketchup"], "🍶", .pantry),

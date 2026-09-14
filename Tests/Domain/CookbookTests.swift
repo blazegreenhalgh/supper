@@ -103,3 +103,12 @@ import Testing
     #expect(RecipePicker.pick(from: [a], excluding: a.id)?.id == a.id)
     for _ in 0..<20 { #expect(RecipePicker.pick(from: [a, b], excluding: a.id)?.id == b.id) }
 }
+
+@Test func manualTextImportKeepsExplicitMetadataAndGroups() {
+    let draft = RecipeTextParser.parse("Soup\nServes: 4\nTotal time: 25 minutes\nIngredients\nSpice mix:\n1 tsp cumin\nMethod\n1. Cook the soup.")
+    #expect(draft.servings == 4); #expect(draft.durationMinutes == 25)
+    #expect(draft.ingredients.first?.group == "Spice mix")
+    #expect(draft.steps.first?.text == "Cook the soup.")
+    let photo = RecipeTextParser.parse("Dinner")
+    #expect(photo.ingredients.isEmpty); #expect(photo.steps.isEmpty)
+}

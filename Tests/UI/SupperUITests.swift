@@ -44,7 +44,7 @@ import XCTest
     }
     func testEditorCancelKeepsRecipeAndSingleReactionControl() {
         let app = launch(); openRecipe(app)
-        XCTAssertEqual(app.buttons["Household reactions"].count, 1)
+        XCTAssertEqual(app.buttons.matching(identifier: "Household reactions").count, 1)
         XCTAssertFalse(app.staticTexts["Your reaction"].exists)
         app.buttons["editRecipe"].tap()
         let title = app.textFields["Recipe name"]

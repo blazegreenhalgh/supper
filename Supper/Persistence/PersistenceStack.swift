@@ -124,9 +124,13 @@ final class PersistenceStack {
     /// Staged lightweight migration retains mirroring metadata and persistent history in place.
     static func migrationManager() -> NSStagedMigrationManager {
         let source = legacyModel(); let destination = model()
-        let stage = NSCustomMigrationStage(
-            migratingFrom: NSManagedObjectModelReference(model: source, versionChecksum: source.versionChecksum),
-            to: NSManagedObjectModelReference(model: destination, versionChecksum: destination.versionChecksum))
-        return NSStagedMigrationManager([stage])
+        let sourceCoordinator = NSPersistentStoreCoordinator(managedObjectModel: source)
+        let destinationCoordinator = NSPersistentStoreCoordinator(managedObjectModel: destination)
+        return withExtendedLifetime((sourceCoordinator, destinationCoordinator)) {
+            let stage = NSCustomMigrationStage(
+                migratingFrom: NSManagedObjectModelReference(model: source, versionChecksum: source.versionChecksum),
+                to: NSManagedObjectModelReference(model: destination, versionChecksum: destination.versionChecksum))
+            return NSStagedMigrationManager([stage])
+        }
     }
 }

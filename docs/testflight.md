@@ -45,9 +45,7 @@ requested or submitted.
 ## CloudKit
 
 The signing profile includes `iCloud.com.blazegreenhalgh.Supper`. Background remote
-notifications are configured. Production schema deployment and multi-account
-sync have not been verified. Household invitations are not implemented in the
-starter app; the initial tester notes state this limitation.
+notifications are configured. The household update implements invitations, member identity and private/shared library selection. Production schema deployment and live multi-account acceptance/sync require signed-device verification; see [household update](household-update.md) for the additive schema and release checks.
 
 ## Daily use
 

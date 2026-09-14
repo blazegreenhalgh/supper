@@ -1,15 +1,12 @@
-Supper has a warmer look, native Liquid Glass controls, and easier recipe browsing.
+Supper: shared cookbook and household update
 
-- Home: portrait and landscape photos stay square in the two-column grid. Check the title and search bar while searching and scrolling.
-- Recipe: switch between illustrated ingredients and step-by-step directions. Open All steps or Notes to see more.
-- Groceries: see which recipes you are shopping for, browse items by aisle, and add an item using the floating glass field above the tabs.
-- Check and uncheck items, swipe to delete from any aisle or the basket, and confirm the correct item changes.
-- Check light/dark appearance, large text, and the add-item field with the keyboard open.
+• Recipe detail: immersive full-width photo, one compact reaction menu, smaller ingredient icons and inline amount capsules.
+• Edit recipes, photos, source, notes, tags, base servings, ingredient groups/categories, steps and multiple collections. Cancel keeps the original; failed saves keep your draft.
+• Change cooking servings without changing the original recipe. Add to Groceries previews the scaled amounts.
+• Review and recover ingredient groups from the original source. Switch between source groups and shopping categories.
+• Groceries combine compatible weights, volumes and counts, retain contributing recipes, and keep checked/removed items removed during retries.
+• Pick something respects search, tags, duration, collections and reactions. Create collections and arrange their homepage sections.
+• On-device recipe text/screenshot assistance, tag suggestions and natural-language search; manual entry and text recognition remain available without Apple Intelligence.
+• Household settings: set your name, invite/manage sharing, accept an invitation, and switch libraries without deleting your existing library.
 
-- Save a recipe using only a photo and title.
-- Import a recipe from a website with structured recipe information.
-- Browse recipes, open recipe details, and add ingredients to the grocery list.
-- Check and uncheck groceries.
-- Close and reopen the app to check that recipes and groceries persist, including offline.
-
-Household invitations and AI-assisted recipe cleanup are still in development.
+Please check normal back, swipe-back and cancelled swipe-back with an active search; Dynamic Type and Reduce Transparency; editing and grocery sync between both phones. CloudKit production schema must include the new fields, collection/member types and sharing record type before this build is distributed to existing households.

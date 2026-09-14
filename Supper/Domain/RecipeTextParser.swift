@@ -11,6 +11,11 @@ public enum RecipeTextParser {
             if heading == "ingredients" { mode = "ingredients"; group = ""; continue }
             if ["method", "instructions", "directions"].contains(heading) { mode = "method"; continue }
             if ["notes", "tips"].contains(heading) { mode = "notes"; continue }
+            if mode.isEmpty, let metadata = metadata(line) {
+                if metadata.kind == "servings" { draft.servings = metadata.value }
+                else { draft.durationMinutes = metadata.value }
+                continue
+            }
             if mode == "ingredients" {
                 if line.hasSuffix(":") { group = String(line.dropLast()); continue }
                 let value = line.replacingOccurrences(of: #"^[•*\-]\s*"#, with: "", options: .regularExpression)
@@ -23,4 +28,15 @@ public enum RecipeTextParser {
         draft.notes = unstructured.joined(separator: "\n")
         return draft
     }
+    private static func metadata(_ text: String) -> (kind: String, value: Int)? {
+        for (kind, pattern) in [("servings", #"^(?:serves|servings|yield)\s*:?\s*(\d+)\s*(?:people|servings)?$"#),
+                                ("duration", #"^(?:total time|duration|time)\s*:?\s*(\d+)\s*(?:minutes?|mins?)$"#)] {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+                  let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                  let range = Range(match.range(at: 1), in: text), let value = Int(text[range]), value > 0 else { continue }
+            return (kind, value)
+        }
+        return nil
+    }
+
 }

@@ -6,7 +6,8 @@ public struct RecipeDocumentParser {
         guard let recipe = extractRecipeObject(from: html) else { throw SupperError.invalid("No recipe metadata found. Try pasting the recipe text or choose manual entry.") }
         var ingredients = ingredientObjects(recipe["recipeIngredient"])
         let pageIngredients = explicitPageIngredients(html)
-        ingredients = GroupRecovery.applyUnambiguous(to: ingredients, recovered: pageIngredients)
+        if ingredients.isEmpty { ingredients = pageIngredients }
+        else { ingredients = GroupRecovery.applyUnambiguous(to: ingredients, recovered: pageIngredients) }
         let duration = ["totalTime", "cookTime", "prepTime"].compactMap { string(recipe[$0]).flatMap(parseISODuration) }.first
         return RecipeDraft(title: cleanText(string(recipe["name"]) ?? ""), durationMinutes: duration,
                            servings: string(recipe["recipeYield"]).flatMap(firstInteger), tags: parseTags(recipe),
