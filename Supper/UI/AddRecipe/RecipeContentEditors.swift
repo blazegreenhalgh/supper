@@ -191,6 +191,7 @@ struct DraftCollectionsEditor: View {
 struct RecipeTagsEditor: View {
     @Binding var tagsText: String
     let draft: RecipeDraft
+    var title = "Tags"
     @State private var suggestions: [String] = []
     @State private var busy = false
     @State private var task: Task<Void, Never>?
@@ -214,7 +215,7 @@ struct RecipeTagsEditor: View {
                     }
                 }
             }
-        }.navigationTitle("Tags").navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(title).navigationBarTitleDisplayMode(.inline)
             .onDisappear { task?.cancel() }.supperError($error, title: "Tag suggestions")
     }
     private func suggest() {

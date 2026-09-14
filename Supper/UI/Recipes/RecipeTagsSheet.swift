@@ -7,6 +7,8 @@ struct RecipeTagsSheet: View {
     @State private var tagsText: String
     @State private var householdID: UUID?
     @State private var error: String?
+    @State private var addingTags = false
+    @State private var newTagsText = ""
 
     init(recipe: Recipe) {
         self.recipe = recipe
@@ -27,8 +29,8 @@ struct RecipeTagsSheet: View {
                             var values = tags; values.remove(atOffsets: offsets)
                             tagsText = values.joined(separator: ", ")
                         }
-                    NavigationLink {
-                        RecipeTagsEditor(tagsText: $tagsText, draft: RecipeDraft(recipe: recipe))
+                    Button {
+                        newTagsText = ""; addingTags = true
                     } label: { Label("Add more tags", systemImage: "plus.circle") }
                         .accessibilityIdentifier("addMoreTags")
                 } footer: { if !tags.isEmpty { Text("Swipe a tag to remove it.") } }
@@ -54,6 +56,21 @@ struct RecipeTagsSheet: View {
             }
             .onAppear { if householdID == nil { householdID = store.activeHouseholdID } }
             .supperError($error, title: "Couldn't save tags")
+            .sheet(isPresented: $addingTags) {
+                NavigationStack {
+                    RecipeTagsEditor(tagsText: $newTagsText, draft: RecipeDraft(recipe: recipe), title: "Add Tags")
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { addingTags = false } }
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("Add") {
+                                    tagsText = ([tagsText, newTagsText].filter { !$0.isEmpty }).joined(separator: ", ")
+                                    addingTags = false
+                                }.disabled(newTagsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                                    .accessibilityIdentifier("confirmNewTags")
+                            }
+                        }
+                }
+            }
         }
     }
 }
