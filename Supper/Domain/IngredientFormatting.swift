@@ -71,7 +71,7 @@ public enum IngredientFormatting {
     }
     private static func weights(in text: String) -> [Weight] {
         let number = #"(?:\d+\s+\d+[/⁄]\d+|\d+[/⁄]\d+|\d+(?:\.\d+)?\s*[½⅓⅔¼¾⅛⅜⅝⅞]?|[½⅓⅔¼¾⅛⅜⅝⅞])"#
-        let pattern = #"(?<![\p{L}\d./])("# + number + #"(?:\s*(?:[-–—]|to)\s*"# + number + #")?)\s*(kilograms?|kgs?|grams?|g|ounces?|oz|pounds?|lbs?)\b"#
+        let pattern = #"(?<![\p{L}\d./–—-])("# + number + #"(?:\s*(?:[-–—]|to)\s*"# + number + #")?)\s*(kilograms?|kgs?|grams?|g|ounces?|oz|pounds?|lbs?)\b\.?"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return [] }
         return regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
             guard let q = Range(match.range(at: 1), in: text), let u = Range(match.range(at: 2), in: text),
@@ -86,7 +86,8 @@ public enum IngredientFormatting {
         let after = String(text[lastRange.upperBound...])
         // Package multipliers/counts, 'each', and size descriptions must retain their meaning.
         let remaining = before + after
-        guard !remaining.contains(where: \.isNumber),
+        let withoutReferences = remaining.replacingOccurrences(of: #"\bnotes?\s+\d+\b|\d+(?:\.\d+)?\s*%"#, with: "", options: [.regularExpression, .caseInsensitive])
+        guard !withoutReferences.contains(where: \.isNumber),
               remaining.range(of: #"\b(each|per|pack|packet|package|size|sized)\b|[×]"#, options: [.regularExpression, .caseInsensitive]) == nil else { return false }
         if measures.count == 2 {
             let betweenRange = NSRange(location: NSMaxRange(first.range), length: last.range.location - NSMaxRange(first.range))

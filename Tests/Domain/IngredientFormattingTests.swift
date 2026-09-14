@@ -24,6 +24,9 @@ import Testing
         ("Butter (100–200 grams)", "100–200", "g", "Butter"),
         ("1½ oz CHEESE", "1½", "oz", "Cheese"),
         ("1/2 oz yeast", "1/2", "oz", "Yeast"),
+        ("8 oz. cream cheese", "8", "oz", "Cream cheese"),
+        ("500g beef mince (Note 1)", "500", "g", "Beef mince (note 1)"),
+        ("100g chocolate (70% cocoa)", "100", "g", "Chocolate (70% cocoa)"),
         ("3 garlic cloves, minced", "3", "", "Garlic cloves, minced")
     ]
     for (name, quantity, unit, expected) in cases {
@@ -43,7 +46,7 @@ import Testing
 }
 
 @Test func formattingKeepsPackageSizesAndConflictingOrUnknownQuantities() {
-    for source in ["2 x 400 g cans tomatoes", "2 (400 g) tins tomatoes", "400g package cream cheese", "2 fl oz vanilla"] {
+    for source in ["2 x 400 g cans tomatoes", "2 (400 g) tins tomatoes", "400g package cream cheese", "2 fl oz vanilla", "-2g salt"] {
         let result = IngredientFormatting.proposal(for: Ingredient(name: source)).proposed
         #expect(result.name.localizedCaseInsensitiveContains(source))
         #expect(result.quantity.isEmpty)
