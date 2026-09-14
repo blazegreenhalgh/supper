@@ -165,6 +165,48 @@ import Testing
         #expect(!store.checkingCloudAccount)
     }
 
+    @Test func deployableSchemaMatchesCurrentManagedObjectModel() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let schema = try String(contentsOf: root.appendingPathComponent("Config/CloudKitSchema.ckdb"), encoding: .utf8)
+        let model = PersistenceStack.model()
+        let fieldPattern = try NSRegularExpression(pattern: #"(?m)^\s+(CD_\w+)\s+(STRING|INT64|TIMESTAMP|BYTES|ASSET)\b"#)
+        for entity in model.entities {
+            let name = try #require(entity.name)
+            let start = try #require(schema.range(of: "RECORD TYPE CD_\(name) ("))
+            let tail = String(schema[start.upperBound...])
+            let end = try #require(tail.range(of: ");"))
+            let block = String(tail[..<end.lowerBound])
+            let range = NSRange(block.startIndex..., in: block)
+            var actual: [String: String] = [:]
+            for match in fieldPattern.matches(in: block, range: range) {
+                let key = (block as NSString).substring(with: match.range(at: 1))
+                actual[key] = (block as NSString).substring(with: match.range(at: 2))
+            }
+            var expected = ["CD_entityName": "STRING", "CD_moveReceipt": "BYTES", "CD_moveReceipt_ckAsset": "ASSET"]
+            for attribute in entity.attributesByName.values {
+                let type: String
+                switch attribute.attributeType {
+                case .stringAttributeType, .UUIDAttributeType: type = "STRING"
+                case .integer64AttributeType, .booleanAttributeType: type = "INT64"
+                case .dateAttributeType: type = "TIMESTAMP"
+                case .binaryDataAttributeType: type = "BYTES"
+                default: Issue.record("Add a CloudKit schema mapping for \(name).\(attribute.name)"); continue
+                }
+                expected["CD_" + attribute.name] = type
+                if attribute.attributeType == .stringAttributeType || attribute.attributeType == .binaryDataAttributeType {
+                    expected["CD_" + attribute.name + "_ckAsset"] = "ASSET"
+                }
+            }
+            for relationship in entity.relationshipsByName.values where !relationship.isToMany {
+                expected["CD_" + relationship.name] = "STRING"
+            }
+            #expect(actual == expected, "CloudKit schema differs for \(name)")
+        }
+        #expect(schema.contains("RECORD TYPE \"cloudkit.share\""))
+        #expect(schema.contains("\"cloudkit.title\""))
+        #expect(schema.components(separatedBy: "RECORD TYPE ").count - 1 == model.entities.count + 2)
+    }
+
     @Test func productionSchemaErrorIsRecognizedInsidePartialFailure() {
         let missing = NSError(domain: CKErrorDomain, code: CKError.Code.serverRejectedRequest.rawValue,
             userInfo: [NSLocalizedDescriptionKey: "Cannot create new type cloudkit.share in production schema"])
