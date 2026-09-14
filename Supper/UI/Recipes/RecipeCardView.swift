@@ -5,19 +5,20 @@ struct RecipeCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            RecipeImage(data: recipe.imageData)
-                .aspectRatio(1, contentMode: .fill)
+            Color.clear
+                .aspectRatio(1, contentMode: .fit)
+                .overlay { RecipeImage(data: recipe.imageData) }
                 .clipShape(.rect(cornerRadius: 22))
                 .overlay(alignment: .bottomTrailing) {
                     if !recipe.reactions.isEmpty {
-                        HStack(spacing: -4) {
+                        HStack(spacing: 2) {
                             ForEach(recipe.reactions.prefix(3)) { reaction in
                                 Text(reaction.emoji)
                                     .font(.caption)
-                                    .padding(6)
-                                    .background(.ultraThinMaterial, in: .circle)
                             }
                         }
+                        .padding(6)
+                        .supperGlassSurface()
                         .padding(8)
                     }
                 }
@@ -39,5 +40,8 @@ struct RecipeCardView: View {
             .foregroundStyle(.secondary)
             .lineLimit(1)
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .contentShape(.rect)
+        .accessibilityElement(children: .combine)
     }
 }

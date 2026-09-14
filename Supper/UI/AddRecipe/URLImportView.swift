@@ -33,9 +33,14 @@ struct URLImportView: View {
                         }
                         .frame(maxWidth: .infinity)
                     }
+                    .supperGlassButton(prominent: true)
+                    .controlSize(.large)
                     .disabled(parsedURL == nil || isImporting)
+                    .listRowBackground(Color.clear)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(SupperStyle.canvas)
             .navigationTitle("Import from URL")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

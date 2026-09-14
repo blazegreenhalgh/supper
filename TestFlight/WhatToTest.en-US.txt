@@ -1,4 +1,10 @@
-Welcome to the first Supper beta.
+Supper has a warmer look, native Liquid Glass controls, and easier recipe browsing.
+
+- Home: portrait and landscape photos stay square in the two-column grid. Check the title and search bar while searching and scrolling.
+- Recipe: switch between illustrated ingredients and step-by-step directions. Open All steps or Notes to see more.
+- Groceries: see which recipes you are shopping for, browse items by aisle, and add an item using the floating glass field above the tabs.
+- Check and uncheck items, swipe to delete from any aisle or the basket, and confirm the correct item changes.
+- Check light/dark appearance, large text, and the add-item field with the keyboard open.
 
 - Save a recipe using only a photo and title.
 - Import a recipe from a website with structured recipe information.

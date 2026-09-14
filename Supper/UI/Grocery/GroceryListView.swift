@@ -3,64 +3,162 @@ import SwiftUI
 struct GroceryListView: View {
     @EnvironmentObject private var store: RecipeStore
     @State private var newItem = ""
+    @State private var showingRecipes = true
+    @FocusState private var isAddingItem: Bool
+
+    private var unchecked: [GroceryItem] { store.groceryItems.filter { !$0.isChecked } }
+    private var checked: [GroceryItem] { store.groceryItems.filter(\.isChecked) }
+    private var canAddItem: Bool { !newItem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var shoppingRecipes: [Recipe] {
+        let ids = Set(store.groceryItems.flatMap(\.sourceRecipeIDs))
+        return store.recipes.filter { ids.contains($0.id) }
+    }
 
     var body: some View {
         List {
-            Section {
-                HStack {
-                    TextField("Add item", text: $newItem)
-                        .submitLabel(.done)
-                        .onSubmit(addItem)
-                    Button(action: addItem) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
+            if !shoppingRecipes.isEmpty {
+                Section {
+                    DisclosureGroup(isExpanded: $showingRecipes) {
+                        ForEach(shoppingRecipes) { recipe in
+                            NavigationLink {
+                                RecipeDetailView(recipeID: recipe.id)
+                            } label: {
+                                shoppingRecipeLabel(recipe)
+                            }
+                            .listRowBackground(SupperStyle.surface)
+                        }
+                    } label: {
+                        HStack {
+                            Text("Shopping for").font(.headline)
+                            Text("\(shoppingRecipes.count)")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                    .disabled(newItem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .tint(.primary)
+                    .listRowBackground(SupperStyle.subtle)
                 }
             }
 
-            if !unchecked.isEmpty {
-                Section("Grocery List") {
-                    ForEach(unchecked) { item in
-                        GroceryRow(item: item)
+            ForEach(GroceryAisle.allCases, id: \.self) { aisle in
+                let items = unchecked.filter { IngredientPresentation.matching($0.name).aisle == aisle }
+                if !items.isEmpty {
+                    Section(aisle.rawValue) {
+                        ForEach(items) { item in
+                            GroceryRow(item: item)
+                                .listRowBackground(SupperStyle.surface)
+                        }
+                        .onDelete { delete($0, from: items) }
                     }
-                    .onDelete(perform: deleteFromDisplayedItems)
                 }
             }
 
             if !checked.isEmpty {
-                Section("Done") {
+                Section("In basket · \(checked.count)") {
                     ForEach(checked) { item in
                         GroceryRow(item: item)
+                            .listRowBackground(SupperStyle.surface)
+                    }
+                    .onDelete { delete($0, from: checked) }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(SupperStyle.canvas)
+        .scrollDismissesKeyboard(.interactively)
+        .navigationTitle("Groceries")
+        .toolbar {
+            if !checked.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu("Grocery options", systemImage: "ellipsis") {
+                        Button("Clear checked items", systemImage: "checkmark.circle", role: .destructive) {
+                            delete(IndexSet(checked.indices), from: checked)
+                        }
                     }
                 }
             }
         }
-        .navigationTitle("Grocery")
         .overlay {
             if store.groceryItems.isEmpty {
                 ContentUnavailableView(
                     "Your grocery list is empty",
-                    systemImage: "cart",
-                    description: Text("Add items manually or add ingredients from a recipe.")
+                    systemImage: "basket",
+                    description: Text("Add an item below, or choose ingredients from a recipe.")
                 )
                 .allowsHitTesting(false)
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            addItemBar
+        }
     }
 
-    private var unchecked: [GroceryItem] { store.groceryItems.filter { !$0.isChecked } }
-    private var checked: [GroceryItem] { store.groceryItems.filter(\.isChecked) }
+    private var addItemBar: some View {
+        SupperGlassGroup {
+            HStack(spacing: 10) {
+                TextField("Add an item", text: $newItem)
+                    .focused($isAddingItem)
+                    .submitLabel(.done)
+                    .onSubmit(addItem)
+                    .padding(.horizontal, 20)
+                    .frame(minHeight: 52)
+                    .supperGlassSurface()
+                    .accessibilityLabel("New grocery item")
+
+                Button(action: addItem) {
+                    Image(systemName: "plus")
+                        .font(.title3.weight(.semibold))
+                        .frame(minWidth: 28, minHeight: 32)
+                }
+                .supperGlassButton(prominent: true)
+                .buttonBorderShape(.circle)
+                .controlSize(.large)
+                .disabled(!canAddItem)
+                .accessibilityLabel("Add grocery item")
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+    }
+
+    private func shoppingRecipeLabel(_ recipe: Recipe) -> some View {
+        let items = store.groceryItems.filter { $0.sourceRecipeIDs.contains(recipe.id) }
+        let remaining = items.filter { !$0.isChecked }.count
+        return HStack(spacing: 14) {
+            RecipeImage(data: recipe.imageData)
+                .frame(width: 58, height: 58)
+                .clipShape(.rect(cornerRadius: 16))
+            VStack(alignment: .leading, spacing: 5) {
+                Text(recipe.title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                Text(remaining == 0 ? "All in your basket" : "\(remaining) of \(items.count) items to buy")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
+        }
+        .accessibilityElement(children: .combine)
+    }
 
     private func addItem() {
-        try? store.addGroceryItem(name: newItem)
-        newItem = ""
+        guard canAddItem else { return }
+        do {
+            try store.addGroceryItem(name: newItem)
+            newItem = ""
+            isAddingItem = true
+        } catch {
+            store.errorMessage = error.localizedDescription
+        }
     }
 
-    private func deleteFromDisplayedItems(at offsets: IndexSet) {
-        let ids = offsets.compactMap { unchecked.indices.contains($0) ? unchecked[$0].id : nil }
-        let sourceOffsets = IndexSet(store.groceryItems.enumerated().compactMap { ids.contains($0.element.id) ? $0.offset : nil })
-        try? store.deleteGroceryItems(at: sourceOffsets)
+    private func delete(_ offsets: IndexSet, from items: [GroceryItem]) {
+        let ids = Set(offsets.compactMap { items.indices.contains($0) ? items[$0].id : nil })
+        let sourceOffsets = IndexSet(store.groceryItems.indices.filter { ids.contains(store.groceryItems[$0].id) })
+        do { try store.deleteGroceryItems(at: sourceOffsets) }
+        catch { store.errorMessage = error.localizedDescription }
     }
 }
 
@@ -68,26 +166,48 @@ private struct GroceryRow: View {
     @EnvironmentObject private var store: RecipeStore
     let item: GroceryItem
 
+    private var recipeNames: String {
+        store.recipes.filter { item.sourceRecipeIDs.contains($0.id) }.map(\.title).joined(separator: ", ")
+    }
+
     var body: some View {
         Button {
-            try? store.toggleGroceryItem(item)
+            do { try store.toggleGroceryItem(item) }
+            catch { store.errorMessage = error.localizedDescription }
         } label: {
-            HStack(spacing: 12) {
-                Image(systemName: item.isChecked ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(item.isChecked ? .secondary : .primary)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text([item.quantity, item.unit, item.name].filter { !$0.isEmpty }.joined(separator: " "))
+            HStack(spacing: 14) {
+                IngredientIcon(name: item.name)
+                    .opacity(item.isChecked ? 0.5 : 1)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.name)
                         .strikethrough(item.isChecked)
                         .foregroundStyle(item.isChecked ? .secondary : .primary)
-                    if !item.sourceRecipeIDs.isEmpty {
-                        Text("From recipe")
+                        .fixedSize(horizontal: false, vertical: true)
+                    let amount = [item.quantity, item.unit].filter { !$0.isEmpty }.joined(separator: " ")
+                    if !amount.isEmpty {
+                        Text(amount)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    if !recipeNames.isEmpty {
+                        Text(recipeNames)
                             .font(.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
                     }
                 }
-                Spacer()
+                Spacer(minLength: 4)
+                Image(systemName: item.isChecked ? "checkmark.circle.fill" : "circle")
+                    .font(.title2)
+                    .foregroundStyle(item.isChecked ? Color.accentColor : Color.secondary)
+                    .accessibilityHidden(true)
             }
+            .padding(.vertical, 6)
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(item.isChecked ? "In basket" : "To buy")
+        .accessibilityHint(item.isChecked ? "Double tap to put back on your list" : "Double tap to mark as in your basket")
     }
 }

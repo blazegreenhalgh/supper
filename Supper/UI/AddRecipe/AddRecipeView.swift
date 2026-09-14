@@ -69,6 +69,8 @@ struct AddRecipeView: View {
                     Text("Quick Add only needs a photo and title. Everything else can be added later.")
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(SupperStyle.canvas)
             .navigationTitle("New Recipe")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

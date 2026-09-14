@@ -2,13 +2,14 @@ import SwiftUI
 
 struct RecipeLibraryView: View {
     @EnvironmentObject private var store: RecipeStore
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var showingAddRecipe = false
     @State private var searchText = ""
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
-    ]
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(minimum: 0), spacing: 16, alignment: .top),
+              count: dynamicTypeSize.isAccessibilitySize ? 1 : 2)
+    }
 
     private var filteredRecipes: [Recipe] {
         guard !searchText.isEmpty else { return store.recipes }
@@ -29,12 +30,12 @@ struct RecipeLibraryView: View {
                 } actions: {
                     if searchText.isEmpty {
                         Button("Add Recipe") { showingAddRecipe = true }
-                            .buttonStyle(.borderedProminent)
+                            .supperGlassButton(prominent: true)
                     }
                 }
                 .padding(.top, 90)
             } else {
-                LazyVGrid(columns: columns, spacing: 18) {
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 24) {
                     ForEach(filteredRecipes) { recipe in
                         NavigationLink(value: recipe) {
                             RecipeCardView(recipe: recipe)
@@ -42,20 +43,24 @@ struct RecipeLibraryView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
                 .padding(.bottom, 30)
             }
         }
+        .background(SupperStyle.canvas)
         .navigationTitle("Supper")
         .navigationDestination(for: Recipe.self) { recipe in
             RecipeDetailView(recipeID: recipe.id)
         }
-        .searchable(text: $searchText, prompt: "Recipes, ingredients or tags")
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always),
+                    prompt: "Recipes, ingredients or tags")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showingAddRecipe = true } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add recipe")
             }
         }
         .sheet(isPresented: $showingAddRecipe) {

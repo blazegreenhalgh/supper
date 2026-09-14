@@ -13,16 +13,16 @@ struct RootView: View {
             NavigationStack {
                 GroceryListView()
             }
-            .tabItem { Label("Grocery", systemImage: "cart") }
+            .tabItem { Label("Groceries", systemImage: "basket") }
         }
         .overlay {
             if !store.isReady && store.errorMessage == nil {
                 ProgressView("Loading Supper…")
                     .padding(20)
-                    .background(.regularMaterial, in: .rect(cornerRadius: 20))
+                    .supperGlassSurface()
             }
         }
-        .alert("Supper couldn't load", isPresented: Binding(
+        .alert("Supper couldn't complete that", isPresented: Binding(
             get: { store.errorMessage != nil },
             set: { if !$0 { store.errorMessage = nil } }
         )) {
