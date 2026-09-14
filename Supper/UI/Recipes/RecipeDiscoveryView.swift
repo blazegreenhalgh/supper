@@ -88,6 +88,7 @@ struct RecipeDiscoveryView: View {
     @State private var path: [UUID] = []
     @State private var showingStartOver = false
     @State private var feedback = 0
+    @State private var swipingRecipe = false
     @FocusState private var promptFocused: Bool
 
     var body: some View {
@@ -207,7 +208,7 @@ struct RecipeDiscoveryView: View {
                 else {
                     Text("Tap to explore. Swipe left to pass, right to keep.")
                         .font(.footnote).foregroundStyle(.secondary)
-                    RecipeDiscoveryStack(suggestions: Array(model.review.pending.prefix(3)), open: { path.append($0) }, keep: keep, discard: discard)
+                    RecipeDiscoveryStack(suggestions: Array(model.review.pending.prefix(3)), isSwiping: $swipingRecipe, open: { path.append($0) }, keep: keep, discard: discard)
                     if !model.review.discardedIDs.isEmpty {
                         Button("Undo last discard", systemImage: "arrow.uturn.backward") { model.undoDiscard() }
                             .font(.subheadline).frame(maxWidth: .infinity).accessibilityIdentifier("undoDiscoveryDiscard")
@@ -215,6 +216,7 @@ struct RecipeDiscoveryView: View {
                 }
             }.padding(20).padding(.bottom, 24).frame(maxWidth: gridView ? 1000 : 600).frame(maxWidth: .infinity)
         }
+        .scrollDisabled(swipingRecipe)
     }
 
     private var grid: some View {
@@ -260,10 +262,17 @@ struct RecipeDiscoveryView: View {
 private struct RecipeDiscoveryStack: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let suggestions: [RecipeSuggestion]
+    @Binding var isSwiping: Bool
     let open: (UUID) -> Void
     let keep: (RecipeSuggestion) -> Bool
     let discard: (UUID) -> Void
     @State private var drag: CGSize = .zero
+    @State private var horizontalDrag: Bool?
+    @State private var keepingDirection = true
+    @GestureState private var gestureActive = false
+
+    private var decisionColor: Color { keepingDirection ? .green : .red }
+    private var decisionProgress: Double { min(Double(abs(drag.width) / 100), 1) }
 
     var body: some View {
         VStack(spacing: 28) {
@@ -271,13 +280,20 @@ private struct RecipeDiscoveryStack: View {
                 ForEach(Array(suggestions.enumerated().reversed()), id: \.element.id) { index, suggestion in
                     card(suggestion, index: index)
                         .scaleEffect(1 - CGFloat(index) * 0.045, anchor: .bottom)
-                        .offset(x: index == 0 ? drag.width : 0, y: CGFloat(index) * 12)
                         .rotationEffect(.degrees(reduceMotion ? 0 : (index == 0 ? Double(drag.width / 28) : Double(index == 1 ? -2 : 2))))
+                        .offset(x: index == 0 ? drag.width : 0, y: CGFloat(index) * 12)
                         .zIndex(Double(3 - index))
                         .allowsHitTesting(index == 0)
                         .accessibilityHidden(index != 0)
                 }
-            }.padding(.bottom, 24)
+            }
+            .background {
+                RoundedRectangle(cornerRadius: 36)
+                    .fill(decisionColor.opacity(decisionProgress * 0.25))
+                    .padding(-10)
+                    .allowsHitTesting(false)
+            }
+            .padding(.bottom, 24)
             if let top = suggestions.first {
                 SupperGlassGroup {
                     HStack(spacing: 24) {
@@ -289,28 +305,38 @@ private struct RecipeDiscoveryStack: View {
                 }
             }
         }
+        // Measure from the stationary stack, never the translated/rotated card.
+        .coordinateSpace(name: "discoverySwipeArea")
         .onChange(of: suggestions.first?.id) { _, _ in drag = .zero }
+        .onChange(of: gestureActive) { _, active in
+            if !active { resetDrag() }
+        }
+        .onDisappear { isSwiping = false }
     }
 
     private func card(_ suggestion: RecipeSuggestion, index: Int) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-                RecipeCardView(recipe: suggestion.recipe)
-                HStack(spacing: 6) {
-                    Image(systemName: suggestion.mode == .online ? "globe" : "sparkles")
-                    Text(suggestion.sourceLabel).lineLimit(1)
-                    Spacer()
-                    Image(systemName: "arrow.up.right")
-                }.font(.caption).foregroundStyle(.secondary)
-        }.padding(16).background(SupperStyle.surface, in: .rect(cornerRadius: 32))
-                .overlay(alignment: drag.width > 0 ? .topLeading : .topTrailing) {
-                    if index == 0 && abs(drag.width) > 25 {
-                        Text(drag.width > 0 ? "KEEP" : "PASS").font(.title2.bold())
-                            .foregroundStyle(drag.width > 0 ? Color.green : Color.red)
-                            .padding(12).background(.regularMaterial, in: .capsule).padding(28)
-                            .opacity(min(Double(abs(drag.width) / 90), 1))
-                    }
-                }
-                .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
+        RecipeDiscoveryCardContent(recipe: suggestion.recipe, mode: suggestion.mode, sourceLabel: suggestion.sourceLabel)
+            .equatable()
+            .padding(16)
+            .background {
+                RoundedRectangle(cornerRadius: 32).fill(SupperStyle.surface)
+                RoundedRectangle(cornerRadius: 32)
+                    .fill(decisionColor.opacity(index == 0 ? decisionProgress * 0.4 : 0))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 32)
+                    .strokeBorder(decisionColor.opacity(index == 0 ? decisionProgress : 0), lineWidth: 3)
+                    .allowsHitTesting(false)
+            }
+            .overlay(alignment: keepingDirection ? .topLeading : .topTrailing) {
+                Label(keepingDirection ? "KEEP" : "DISCARD", systemImage: keepingDirection ? "checkmark" : "xmark")
+                    .font(.title3.bold()).foregroundStyle(decisionColor)
+                    .padding(12).background(.regularMaterial, in: .capsule).padding(28)
+                    .opacity(index == 0 ? decisionProgress : 0)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
             .contentShape(.rect)
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
@@ -320,21 +346,60 @@ private struct RecipeDiscoveryStack: View {
             .accessibilityAction { open(suggestion.id) }
             .accessibilityAction(named: "Keep recipe") { decide(suggestion, keeping: true) }
             .accessibilityAction(named: "Discard recipe") { decide(suggestion, keeping: false) }
-            .simultaneousGesture(DragGesture(minimumDistance: 20)
+            .simultaneousGesture(DragGesture(minimumDistance: 10, coordinateSpace: .named("discoverySwipeArea"))
+                .updating($gestureActive) { _, active, _ in active = true }
                 .onChanged { value in
-                    if abs(value.translation.width) > abs(value.translation.height) { drag = CGSize(width: value.translation.width, height: 0) }
+                    // Lock the axis once and follow the finger without implicit animation.
+                    var transaction = Transaction(animation: nil)
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) {
+                        if horizontalDrag == nil {
+                            horizontalDrag = abs(value.translation.width) > abs(value.translation.height)
+                        }
+                        if horizontalDrag == true {
+                            if !isSwiping { isSwiping = true }
+                            if value.translation.width != 0 { keepingDirection = value.translation.width > 0 }
+                            drag = CGSize(width: value.translation.width, height: 0)
+                        }
+                    }
                 }
                 .onEnded { value in
-                    let horizontal = abs(value.translation.width) > abs(value.translation.height) * 1.4
-                    let committed = abs(value.translation.width) > 100 || (abs(value.translation.width) > 45 && abs(value.predictedEndTranslation.width) > 220)
-                    if horizontal && committed { decide(suggestion, keeping: value.translation.width > 0) }
-                    else { withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.7)) { drag = .zero } }
+                    let sameDirection = value.translation.width * value.predictedEndTranslation.width > 0
+                    let committed = abs(value.translation.width) > 100 || (abs(value.translation.width) > 45 && sameDirection && abs(value.predictedEndTranslation.width) > 220)
+                    if horizontalDrag == true && committed { decide(suggestion, keeping: value.translation.width > 0) }
+                    else { resetDrag() }
                 }.exclusively(before: TapGesture().onEnded { open(suggestion.id) }))
     }
+    private func resetDrag() {
+        horizontalDrag = nil
+        isSwiping = false
+        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85)) { drag = .zero }
+    }
     private func decide(_ suggestion: RecipeSuggestion, keeping: Bool) {
+        horizontalDrag = nil
+        isSwiping = false
         withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.8)) {
             if keeping { _ = keep(suggestion) } else { discard(suggestion.id) }
             drag = .zero
+        }
+    }
+}
+
+/// Keep recipe/image rendering independent of per-frame drag and colour updates.
+private struct RecipeDiscoveryCardContent: View, Equatable {
+    let recipe: Recipe
+    let mode: RecipeDiscoveryMode
+    let sourceLabel: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            RecipeCardView(recipe: recipe)
+            HStack(spacing: 6) {
+                Image(systemName: mode == .online ? "globe" : "sparkles")
+                Text(sourceLabel).lineLimit(1)
+                Spacer()
+                Image(systemName: "arrow.up.right")
+            }.font(.caption).foregroundStyle(.secondary)
         }
     }
 }
