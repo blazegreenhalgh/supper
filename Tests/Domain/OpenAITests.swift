@@ -138,7 +138,7 @@ import FoundationNetworking
             let schema = format?["schema"] as? [String: Any]
             let properties = schema?["properties"] as? [String: Any]
             let action = properties?["action"] as? [String: Any]
-            #expect(action?["enum"] as? [String] == ["recipe", "find_photo", "generate_photo", "enhance_photo", "choose_photo"])
+            #expect(action?["enum"] as? [String] == ["recipe", "collections", "find_photo", "generate_photo", "enhance_photo", "choose_photo"])
             return (200, Data(#"{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"{\"action\":\"find_photo\"}"}]}]}"#.utf8))
         }
         #expect(try await client.recipeChatAction(request: "Find a real photo online; don't generate one", conversation: "") == .findPhoto)

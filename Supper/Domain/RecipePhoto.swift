@@ -1,7 +1,7 @@
 import Foundation
 
 public enum RecipeChatAction: String, Codable, CaseIterable, Sendable {
-    case recipe, findPhoto = "find_photo", generatePhoto = "generate_photo", enhancePhoto = "enhance_photo", choosePhoto = "choose_photo"
+    case recipe, collections, findPhoto = "find_photo", generatePhoto = "generate_photo", enhancePhoto = "enhance_photo", choosePhoto = "choose_photo"
 }
 
 public enum RecipePhotoKind: String, CaseIterable, Sendable {

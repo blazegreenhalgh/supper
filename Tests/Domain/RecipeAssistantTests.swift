@@ -4,6 +4,47 @@ import Testing
 
 private let naanSource = RecipeAssistantSource(title: "Naan", url: URL(string: "https://www.recipetineats.com/naan-recipe/")!)
 
+@Test func collectionEditsPreserveContentAndUnrelatedMemberships() throws {
+    let a = RecipeCollection(name: "Weeknight"), b = RecipeCollection(name: "Weekend"), c = RecipeCollection(name: "Favourites")
+    let household = UUID()
+    var draft = RecipeDraft(title: "Soup", ingredients: [Ingredient(name: "Carrot")])
+    draft.collectionIDs = [a.id, c.id]
+    let proposal = RecipeCollectionProposal(base: draft.collectionIDs, edit: .init(add: [b.id], remove: [a.id]), householdID: household)
+    draft.notes = "A manual edit made while the assistant was working"
+    let result = try proposal.applying(to: draft, collections: [a, b, c], householdID: household)
+    #expect(result.collectionIDs == [b.id, c.id])
+    #expect(result.notes == draft.notes)
+    #expect(result.ingredients == draft.ingredients)
+    #expect(try RecipeAssistantUndo(before: draft, after: result).restoring(result) == draft)
+    #expect(throws: (any Error).self) { try proposal.applying(to: result, collections: [a, b, c], householdID: household) }
+    #expect(throws: (any Error).self) { try proposal.applying(to: draft, collections: [a, c], householdID: household) }
+    #expect(throws: (any Error).self) { try proposal.applying(to: draft, collections: [a, b, c], householdID: UUID()) }
+}
+
+@Test func collectionEditsRejectFabricatedConflictingOrAmbiguousOperations() throws {
+    let a = UUID(), b = UUID()
+    #expect(throws: (any Error).self) { try RecipeCollectionEdit(add: [b], remove: []).applying(to: [], available: [a]) }
+    #expect(throws: (any Error).self) { try RecipeCollectionEdit(add: [a], remove: [a]).applying(to: [], available: [a]) }
+    #expect(throws: (any Error).self) { try RecipeCollectionEdit(add: [a], remove: [], question: "Which one?").applying(to: [], available: [a]) }
+    #expect(try RecipeCollectionEdit(add: [], remove: [], question: "Which collection?").applying(to: [a], available: [a]) == [a])
+    #expect(try RecipeCollectionEdit(add: [a, a], remove: []).applying(to: [a], available: [a]) == [a])
+}
+
+@Test func collectionDraggingMovesOnlyItsSourceAndAllRecipesDraggingAdds() throws {
+    let a = UUID(), b = UUID(), c = UUID(), household = UUID()
+    let recipe = Recipe(title: "Soup", collectionIDs: [a, c])
+    let drag = RecipeDragItem(recipeID: recipe.id, householdID: household, sourceCollectionID: a)
+    let decoded = try JSONDecoder().decode(RecipeDragItem.self, from: JSONEncoder().encode(drag))
+    #expect(try decoded.memberships(for: recipe, destination: b, householdID: household, available: [a, b, c]) == [b, c])
+    #expect(try drag.memberships(for: recipe, destination: a, householdID: household, available: [a, b, c]) == [a, c])
+    let fromAll = RecipeDragItem(recipeID: recipe.id, householdID: household, sourceCollectionID: nil)
+    #expect(try fromAll.memberships(for: recipe, destination: b, householdID: household, available: [a, b, c]) == [a, b, c])
+    #expect(throws: (any Error).self) { try drag.memberships(for: recipe, destination: b, householdID: UUID(), available: [a, b, c]) }
+    #expect(throws: (any Error).self) { try drag.memberships(for: recipe, destination: b, householdID: household, available: [a, c]) }
+    var changed = recipe; changed.collectionIDs = [c]
+    #expect(throws: (any Error).self) { try drag.memberships(for: changed, destination: b, householdID: household, available: [a, b, c]) }
+}
+
 @Test func assistantBuildsOneComponentWithoutReplacingTheRecipe() throws {
     let pizza = Ingredient(name: "Mozzarella", quantity: "100", unit: "g", group: "Pizza toppings", categoryOverride: .dairyAndEggs)
     let bake = RecipeStep(text: "Add toppings and bake.", group: "Pizza")

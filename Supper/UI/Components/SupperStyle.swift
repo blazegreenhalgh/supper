@@ -36,7 +36,13 @@ extension View {
     @ViewBuilder
     func supperGlassPanel() -> some View {
         if #available(iOS 26.0, *) {
-            self.glassEffect(.regular, in: .rect(cornerRadius: 28))
+            // Keep text fields and scroll views in the normal content hierarchy.
+            // The glass is a separate surface behind them, including while the
+            // keyboard changes the panel's position and size.
+            self.background {
+                Color.clear.glassEffect(.regular, in: .rect(cornerRadius: 28))
+                    .allowsHitTesting(false)
+            }
         } else {
             self.background(.regularMaterial, in: .rect(cornerRadius: 28))
         }

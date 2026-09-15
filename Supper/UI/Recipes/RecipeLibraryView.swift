@@ -1,4 +1,9 @@
 import SwiftUI
+import UniformTypeIdentifiers
+
+extension UTType {
+    static let supperRecipeCard = UTType(exportedAs: "app.supper.recipe-card", conformingTo: .data)
+}
 
 struct RecipeLibraryView: View {
     @EnvironmentObject private var store: RecipeStore
@@ -14,12 +19,16 @@ struct RecipeLibraryView: View {
     @State private var showingPicker = false
     @State private var showingSearchAssistant = false
     @State private var showingDiscovery = false
+    @State private var editingRecipe: Recipe?
+    @State private var groceryRecipe: Recipe?
+    @State private var deletingRecipe: Recipe?
+    @State private var dropTarget: UUID?
     @StateObject private var discovery = RecipeDiscoveryModel()
     private var columnCount: Int { dynamicTypeSize.isAccessibilitySize ? 1 : 2 }
     private var columns: [GridItem] { Array(repeating: GridItem(.flexible(minimum: 0), spacing: 16, alignment: .top), count: columnCount) }
     private var filteredRecipes: [Recipe] { store.recipes.filter { filter.matches($0, collections: store.collections, memberID: store.currentMemberID, members: store.members) } }
     private var allTags: [String] { Array(Set(store.recipes.flatMap(\.tags))).sorted() }
-    var body: some View {
+    private var libraryContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 if !isSearch {
@@ -53,11 +62,15 @@ struct RecipeLibraryView: View {
                     if !filter.isActive && !isSearch {
                         ForEach(store.collections.filter(\.isOnHome)) { collection in
                             let recipes = store.recipes.filter { $0.collectionIDs.contains(collection.id) }
-                            if !recipes.isEmpty {
                                 VStack(alignment: .leading, spacing: 12) {
                                     Button { filter.collectionIDs = [collection.id] } label: {
                                         HStack { Text(collection.name).font(.title2.bold()); Spacer(); Image(systemName: "arrow.right").font(.subheadline) }
                                     }.buttonStyle(.plain).padding(.horizontal, 20)
+                                    if recipes.isEmpty {
+                                        Label("Drop a recipe here", systemImage: "tray.and.arrow.down")
+                                            .font(.subheadline).foregroundStyle(.secondary)
+                                            .frame(maxWidth: .infinity, minHeight: 64).padding(.horizontal, 20)
+                                    } else {
                                     ScrollView(.horizontal, showsIndicators: false) {
                                         LazyHStack(alignment: .top, spacing: 16) {
                                             ForEach(recipes) { recipe in
@@ -67,8 +80,16 @@ struct RecipeLibraryView: View {
                                         }
                                     }
                                     .contentMargins(.horizontal, 20, for: .scrollContent)
+                                    }
                                 }
-                            }
+                                .padding(.vertical, 6)
+                                .background(dropTarget == collection.id ? Color.accentColor.opacity(0.1) : .clear, in: .rect(cornerRadius: 20))
+                                .contentShape(.rect)
+                                .onDrop(of: [.supperRecipeCard], isTargeted: Binding(get: { dropTarget == collection.id }, set: { targeted in
+                                    if targeted { dropTarget = collection.id }
+                                    else if dropTarget == collection.id { dropTarget = nil }
+                                })) { providers in receiveDrop(providers, into: collection.id) }
+                                .accessibilityElement(children: .contain).accessibilityIdentifier("collectionDrop-" + collection.name)
                         }
                     }
                     Text(filter.isActive ? "Results" : "All recipes").font(.title2.bold()).padding(.horizontal, 20)
@@ -80,6 +101,10 @@ struct RecipeLibraryView: View {
             }.padding(.top, 12).padding(.bottom, 32)
                 .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: filter)
         }
+    }
+
+    var body: some View {
+        libraryContent
         .background(SupperStyle.canvas)
         .navigationTitle(isSearch ? "Search" : "Supper")
         .toolbar {
@@ -102,19 +127,84 @@ struct RecipeLibraryView: View {
             }
         }
         .sheet(isPresented: $showingAddRecipe) { AddRecipeView() }
+        .sheet(item: $editingRecipe) { AddRecipeView(recipe: $0) }
+        .sheet(item: $groceryRecipe) { AddIngredientsToGroceryView(recipe: $0, servings: $0.servings) }
+        .alert("Delete recipe?", isPresented: Binding(get: { deletingRecipe != nil }, set: { if !$0 { deletingRecipe = nil } }), presenting: deletingRecipe) { recipe in
+            Button("Delete recipe", role: .destructive) {
+                do { try store.deleteRecipe(recipe); deletingRecipe = nil }
+                catch { store.errorMessage = error.localizedDescription }
+            }
+            Button("Cancel", role: .cancel) { deletingRecipe = nil }
+        } message: { recipe in Text("Delete \(recipe.title) from the household library?") }
         .sheet(isPresented: $showingDiscovery) { RecipeDiscoveryView(model: discovery) }
         .sheet(isPresented: $showingCollections) { CollectionsView() }
         .sheet(isPresented: $showingHousehold) { HouseholdSettingsView() }
         .sheet(isPresented: $showingPicker) { PickRecipeView(recipes: filteredRecipes) { id in showingPicker = false; openRecipe(RecipeRoute(recipeID: id)) } }
         .sheet(isPresented: $showingSearchAssistant) { SearchAssistanceView(initialQuery: filter.query, collections: store.collections, tags: allTags) { filter = $0; showingSearchAssistant = false } }
     }
-    private func recipeLink(_ recipe: Recipe, section: String = "all") -> some View {
+    @ViewBuilder private func recipeLink(_ recipe: Recipe, section: String = "all") -> some View {
         let route = RecipeRoute(recipeID: recipe.id, section: section)
-        return NavigationLink(value: route) {
-            RecipeCardView(recipe: recipe, transition: RecipeTransitionSource(id: route.sourceID, namespace: transition))
+        NavigationLink(value: route) {
+            draggableCard(recipe, route: route, section: section)
         }.buttonStyle(.plain)
+            .contextMenu {
+                Button("Open recipe", systemImage: "arrow.up.right") { openRecipe(route) }
+                Menu("Collection", systemImage: "folder") {
+                    ForEach(store.collections) { collection in
+                        Toggle(collection.name, isOn: Binding(get: {
+                            store.recipes.first(where: { $0.id == recipe.id })?.collectionIDs.contains(collection.id) ?? false
+                        }, set: { selected in
+                            guard let current = store.recipes.first(where: { $0.id == recipe.id }) else { return }
+                            var ids = current.collectionIDs
+                            if selected { ids.insert(collection.id) } else { ids.remove(collection.id) }
+                            do { try store.setMemberships(ids, recipeID: recipe.id) }
+                            catch { store.errorMessage = error.localizedDescription }
+                        })).accessibilityIdentifier("cardCollection-" + collection.name)
+                    }
+                    Button("Manage collections…", systemImage: "folder.badge.plus") { showingCollections = true }
+                }
+                Button("Add to groceries", systemImage: "cart.badge.plus") { groceryRecipe = recipe }
+                    .disabled(recipe.ingredients.isEmpty).accessibilityIdentifier("cardAddToGroceries")
+                Button("Edit", systemImage: "pencil") { editingRecipe = recipe }.accessibilityIdentifier("cardEditRecipe")
+                if let url = recipe.sourceURL { ShareLink(item: url) }
+                Button("Delete", systemImage: "trash", role: .destructive) { deletingRecipe = recipe }.accessibilityIdentifier("cardDeleteRecipe")
+            } preview: {
+                VStack(alignment: .leading, spacing: 12) {
+                    RecipeCardView(recipe: recipe)
+                    Text("\(recipe.ingredients.count) ingredients · \(recipe.steps.count) steps")
+                        .font(.caption).foregroundStyle(.secondary)
+                }.padding(18).frame(width: 300).background(SupperStyle.canvas)
+            }
             .transition(.opacity)
             .accessibilityIdentifier(recipe.title == "Chicken with rice" ? "recipe-test-chicken" : "recipe-" + recipe.id.uuidString)
+    }
+
+    @ViewBuilder private func draggableCard(_ recipe: Recipe, route: RecipeRoute, section: String) -> some View {
+        let card = RecipeCardView(recipe: recipe, transition: RecipeTransitionSource(id: route.sourceID, namespace: transition))
+        if let householdID = store.activeHouseholdID {
+            card.onDrag {
+                let item = RecipeDragItem(recipeID: recipe.id, householdID: householdID, sourceCollectionID: UUID(uuidString: section))
+                guard let data = try? JSONEncoder().encode(item) else { return NSItemProvider() }
+                return NSItemProvider(item: data as NSData, typeIdentifier: UTType.supperRecipeCard.identifier)
+            } preview: {
+                RecipeCardView(recipe: recipe).padding(12).frame(width: 180).background(SupperStyle.canvas, in: .rect(cornerRadius: 20))
+            }
+        } else { card }
+    }
+
+    private func receiveDrop(_ providers: [NSItemProvider], into collectionID: UUID) -> Bool {
+        guard providers.count == 1, let provider = providers.first,
+              provider.hasItemConformingToTypeIdentifier(UTType.supperRecipeCard.identifier) else { return false }
+        provider.loadDataRepresentation(forTypeIdentifier: UTType.supperRecipeCard.identifier) { data, _ in
+            Task { @MainActor in
+                do {
+                    guard let data else { throw SupperError.invalid("Couldn't read that recipe card. Try dragging it again.") }
+                    let item = try JSONDecoder().decode(RecipeDragItem.self, from: data)
+                    try store.moveRecipe(item, to: collectionID)
+                } catch { store.errorMessage = error.localizedDescription }
+            }
+        }
+        return true
     }
 
 }

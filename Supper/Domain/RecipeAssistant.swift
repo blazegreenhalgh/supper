@@ -176,3 +176,39 @@ public struct RecipeAssistantUndo: Sendable {
         return before
     }
 }
+
+/// Organising a draft uses known collection IDs, never recipe evidence or model-written success claims.
+public struct RecipeCollectionEdit: Codable, Sendable {
+    public let add: [UUID]
+    public let remove: [UUID]
+    public let question: String
+    public init(add: [UUID], remove: [UUID], question: String = "") {
+        self.add = add; self.remove = remove; self.question = question
+    }
+    public func applying(to current: Set<UUID>, available: Set<UUID>) throws -> Set<UUID> {
+        let additions = Set(add), removals = Set(remove)
+        guard additions.isDisjoint(with: removals), additions.union(removals).isSubset(of: available),
+              question.isEmpty || (add.isEmpty && remove.isEmpty) else {
+            throw SupperError.invalid("Those collections are no longer available. Ask again using a current collection name.")
+        }
+        return current.subtracting(removals).union(additions)
+    }
+}
+
+public struct RecipeCollectionProposal: Identifiable, Sendable {
+    public let id = UUID()
+    public let base: Set<UUID>
+    public let edit: RecipeCollectionEdit
+    public let householdID: UUID?
+    public init(base: Set<UUID>, edit: RecipeCollectionEdit, householdID: UUID?) {
+        self.base = base; self.edit = edit; self.householdID = householdID
+    }
+    public func applying(to draft: RecipeDraft, collections: [RecipeCollection], householdID: UUID?) throws -> RecipeDraft {
+        guard self.householdID == householdID, draft.collectionIDs == base else {
+            throw SupperError.invalid("Your collections changed. Ask again to use the latest selection.")
+        }
+        var result = draft
+        result.collectionIDs = try edit.applying(to: base, available: Set(collections.map(\.id)))
+        return result
+    }
+}

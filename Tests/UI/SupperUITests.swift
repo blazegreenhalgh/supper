@@ -1,6 +1,11 @@
 import XCTest
 
 @MainActor final class SupperUITests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+    }
+
     func testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests() {
         let app = launch()
         app.buttons["Library options"].tap()
@@ -30,23 +35,31 @@ import XCTest
     func testRecipeChatKeepsInputWhenReopenedAndCancelDoesNotSave() {
         let app = launch(); openRecipe(app)
         app.buttons["editRecipe"].tap()
-        XCTAssertTrue(app.buttons["toggleRecipeChat"].waitForExistence(timeout: 5))
+        XCTAssertTrue(chatInput(app).waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["askRecipeAI"].exists)
         XCTAssertFalse(app.buttons["closeRecipeChat"].exists)
-        XCTAssertFalse(app.textViews["recipeChatInput"].exists)
+        XCTAssertFalse(app.buttons["toggleRecipeChat"].exists)
+        XCTAssertLessThan(chatInput(app).frame.height, 65)
+        XCTAssertGreaterThanOrEqual(chatInput(app).frame.minX, 24)
         capture(app, "Permanent floating AI bar")
         app.swipeUp()
         let source = app.textFields["Website URL (optional)"]
+        if source.frame.maxY >= chatInput(app).frame.minY {
+            app.collectionViews.firstMatch.swipeUp()
+        }
         XCTAssertTrue(source.isHittable)
-        XCTAssertLessThan(source.frame.maxY, app.buttons["toggleRecipeChat"].frame.minY)
-        app.buttons["toggleRecipeChat"].tap()
+        XCTAssertLessThan(source.frame.maxY, chatInput(app).frame.minY)
         let field = app.textFields["recipeChatInput"]
         let input = field.exists ? field : app.textViews["recipeChatInput"]
         XCTAssertTrue(input.waitForExistence(timeout: 5))
         input.tap(); input.typeText("Add ingredients and a method for naan bread")
+        XCTAssertLessThanOrEqual(app.buttons["sendRecipeChat"].frame.height, input.frame.height + 1)
         capture(app, "Recipe assistant with native composer")
-        collapseRecipeChat(app)
-        app.buttons["toggleRecipeChat"].tap()
+        let handle = app.buttons["toggleRecipeChat"]
+        handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.1, thenDragTo: handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).withOffset(CGVector(dx: 0, dy: 100)))
+        XCTAssertFalse(app.buttons["toggleRecipeChat"].exists)
+        XCTAssertLessThan(chatInput(app).frame.height, 65)
+        chatInput(app).tap()
         XCTAssertTrue(input.waitForExistence(timeout: 5))
         XCTAssertEqual(input.value as? String, "Add ingredients and a method for naan bread")
         collapseRecipeChat(app)
@@ -60,8 +73,8 @@ import XCTest
         app.buttons["toggleRecipeChat"].tap()
         app.buttons["editIngredients"].tap()
         XCTAssertTrue(app.buttons["addIngredient"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["toggleRecipeChat"].isHittable)
-        app.buttons["toggleRecipeChat"].tap()
+        XCTAssertTrue(chatInput(app).isHittable)
+        expandRecipeChat(app)
         app.buttons["addIngredient"].tap()
         XCTAssertTrue(app.navigationBars["Add Ingredient"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["reviewRecipeAIEdit"].isHittable)
@@ -88,7 +101,7 @@ import XCTest
         XCTAssertTrue(app.buttons["addMethodStep"].waitForExistence(timeout: 5))
         app.buttons["addMethodStep"].tap()
         XCTAssertTrue(app.navigationBars["Add Step"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["toggleRecipeChat"].isHittable)
+        XCTAssertTrue(chatInput(app).isHittable)
         app.buttons["Cancel"].tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
         collapseRecipeChat(app)
@@ -102,6 +115,7 @@ import XCTest
         app.buttons["toggleRecipeChat"].tap()
         app.buttons["editIngredients"].tap()
         XCTAssertTrue(app.buttons["addIngredient"].waitForExistence(timeout: 5))
+        expandRecipeChat(app)
         app.buttons["reviewRecipeAIEdit"].tap()
         XCTAssertTrue(app.segmentedControls["recipeAIPreviewMode"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Removed ingredients"].exists)
@@ -137,15 +151,33 @@ import XCTest
         XCTAssertTrue(app.buttons["recipe-test-chicken"].waitForExistence(timeout: 15))
         openRecipe(app)
         app.buttons["editRecipe"].tap()
-        XCTAssertTrue(app.buttons["toggleRecipeChat"].waitForExistence(timeout: 5))
-        app.buttons["toggleRecipeChat"].tap()
+        expandRecipeChat(app)
         XCTAssertTrue(app.buttons["reviewRecipeAIEdit"].waitForExistence(timeout: 5))
         return app
     }
 
     private func collapseRecipeChat(_ app: XCUIApplication) {
         let bar = app.buttons["toggleRecipeChat"]
-        if bar.label == "Minimise Ask AI" { bar.tap() }
+        if bar.exists { bar.tap() }
+    }
+
+    private func chatInput(_ app: XCUIApplication) -> XCUIElement {
+        let field = app.textFields["recipeChatInput"]
+        return field.exists ? field : app.textViews["recipeChatInput"]
+    }
+
+    private func expandRecipeChat(_ app: XCUIApplication) {
+        XCTAssertTrue(chatInput(app).waitForExistence(timeout: 5))
+        if !app.buttons["toggleRecipeChat"].exists {
+            chatInput(app).tap()
+            XCTAssertTrue(app.buttons["toggleRecipeChat"].waitForExistence(timeout: 5))
+            XCTAssertTrue(chatInput(app).isHittable, app.debugDescription)
+            if app.keyboards.firstMatch.exists {
+                XCTAssertLessThanOrEqual(chatInput(app).frame.maxY, app.keyboards.firstMatch.frame.minY + 1)
+            }
+            app.scrollViews["recipeChatMessages"].swipeDown()
+            app.scrollViews["recipeChatMessages"].swipeUp()
+        }
     }
 
     func testDiscoveryLoadingCanBeCancelledAndKeepsThePrompt() {
@@ -154,13 +186,12 @@ import XCTest
         app.launch()
         XCTAssertTrue(app.buttons["openRecipeDiscovery"].waitForExistence(timeout: 15))
         app.buttons["openRecipeDiscovery"].tap()
-        capture(app, "Centred craving input and animated glow")
+        capture(app, "Warm kitchen craving input")
         app.buttons["A cosy one-pot dinner"].tap()
         app.buttons["findDiscoveryRecipes"].tap()
-        // SwiftUI's labelled indeterminate ProgressView is not exposed as an
-        // XCTest ProgressIndicator. The visible Cancel control identifies this state.
+        // The cooking animation keeps cancellation available throughout the search.
         XCTAssertTrue(app.buttons["cancelDiscoverySearch"].waitForExistence(timeout: 5))
-        capture(app, "Discovery searching with orbiting halo")
+        capture(app, "Discovery searching with stirring pot and steam")
         app.buttons["cancelDiscoverySearch"].tap()
         XCTAssertTrue(app.buttons["findDiscoveryRecipes"].waitForExistence(timeout: 5))
         let field = app.textFields["discoveryPrompt"]
@@ -169,12 +200,79 @@ import XCTest
         XCTAssertFalse(app.buttons["discoveryTopCard"].exists)
     }
 
+    func testChatCollectionChangesApplyToDraftAndOnlyPersistOnSave() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--collection-chat-ui-testing"]
+        app.launch()
+        XCTAssertTrue(app.buttons["recipe-test-chicken"].waitForExistence(timeout: 15))
+        openRecipe(app); app.buttons["editRecipe"].tap(); expandRecipeChat(app)
+        app.scrollViews["recipeChatMessages"].swipeUp()
+        XCTAssertTrue(app.buttons["applyChatCollections"].waitForExistence(timeout: 5))
+        capture(app, "Collection changes ready to apply")
+        app.buttons["applyChatCollections"].tap()
+        XCTAssertTrue(app.buttons["undoRecipeAIEdit"].waitForExistence(timeout: 5))
+        collapseRecipeChat(app); app.buttons["Cancel"].tap()
+        app.buttons["Recipe options"].tap(); app.buttons["Collections"].tap()
+        XCTAssertTrue(app.switches["Weeknight"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.switches["Weeknight"].value as? String, "0")
+        app.buttons["Cancel"].tap()
+        app.buttons["editRecipe"].tap(); expandRecipeChat(app)
+        app.scrollViews["recipeChatMessages"].swipeUp()
+        app.buttons["applyChatCollections"].tap()
+        collapseRecipeChat(app); app.buttons["Save"].tap()
+        app.buttons["Recipe options"].tap(); app.buttons["Collections"].tap()
+        XCTAssertTrue(app.switches["Weeknight"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.switches["Weeknight"].value as? String, "1")
+    }
+
+    func testRecipeCardPreviewActionsAndCollectionSubmenu() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--collection-library-ui-testing", "--ui-testing-disable-animations"]
+        app.launch()
+        let card = app.buttons["recipe-test-chicken"].firstMatch
+        XCTAssertTrue(card.waitForExistence(timeout: 15))
+        card.press(forDuration: 1)
+        XCTAssertTrue(app.buttons["cardEditRecipe"].waitForExistence(timeout: 5))
+        capture(app, "Recipe long press preview and actions")
+        XCTAssertTrue(app.buttons["cardAddToGroceries"].exists)
+        XCTAssertTrue(app.buttons["cardDeleteRecipe"].exists)
+        app.buttons["Collection"].tap(); app.buttons["cardCollection-Weekend"].tap()
+        let weekend = app.otherElements["collectionDrop-Weekend"]
+        XCTAssertTrue(weekend.buttons["recipe-test-chicken"].waitForExistence(timeout: 5))
+        card.press(forDuration: 1); app.buttons["cardDeleteRecipe"].tap()
+        XCTAssertTrue(app.alerts["Delete recipe?"].waitForExistence(timeout: 5))
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(card.exists)
+    }
+
+    func testRecipeDragMovesBetweenHomeCollections() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--collection-library-ui-testing", "--ui-testing-disable-animations"]
+        app.launch()
+        let source = app.otherElements["collectionDrop-Weeknight"]
+        let target = app.otherElements["collectionDrop-Weekend"]
+        let card = source.buttons["recipe-test-chicken"]
+        XCTAssertTrue(card.waitForExistence(timeout: 15))
+        XCTAssertFalse(target.buttons["recipe-test-chicken"].exists)
+        // Keep both sections away from the bottom auto-scroll region. A drag to
+        // a screen-edge coordinate becomes stale as the library scrolls beneath it.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.7)).press(forDuration: 0.05,
+            thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)), withVelocity: .slow, thenHoldForDuration: 0)
+        XCTAssertTrue(card.isHittable)
+        XCTAssertLessThan(target.frame.maxY, app.tabBars.firstMatch.frame.minY - 20)
+        card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)).press(forDuration: 1.1,
+            thenDragTo: target.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65)), withVelocity: .slow, thenHoldForDuration: 1)
+        XCTAssertTrue(target.buttons["recipe-test-chicken"].waitForExistence(timeout: 5))
+        XCTAssertFalse(source.buttons["recipe-test-chicken"].exists)
+        capture(app, "Recipe moved to another collection")
+    }
+
     func testRecipePhotosPreviewOriginalAndApplyWithUndoAndUploadOption() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "--recipe-photo-ui-testing"]
         app.launch()
         XCTAssertTrue(app.buttons["recipe-test-chicken"].waitForExistence(timeout: 15))
-        openRecipe(app); app.buttons["editRecipe"].tap(); app.buttons["toggleRecipeChat"].tap()
+        openRecipe(app); app.buttons["editRecipe"].tap(); expandRecipeChat(app)
         XCTAssertTrue(app.buttons["reviewChatPhoto"].waitForExistence(timeout: 5))
         capture(app, "Liquid Glass chat with photo options")
         app.scrollViews["chatPhotoCarousel"].swipeLeft()

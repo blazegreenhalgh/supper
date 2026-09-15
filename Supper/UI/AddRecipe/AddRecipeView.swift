@@ -14,7 +14,7 @@ struct AddRecipeView: View {
     @State private var showingURLImport = false
     @State private var showingAssistant = false
     @State private var chatExpanded = false
-    @State private var chatHeight: CGFloat = 74
+    @State private var chatHeight: CGFloat = 56
     @State private var showingCover = false
     @StateObject private var recipeChat = RecipeChatSession()
     @State private var errorMessage: String?
@@ -30,21 +30,21 @@ struct AddRecipeView: View {
     }
     var body: some View {
         GeometryReader { geometry in
-            ZStack(alignment: .bottom) {
-                editor
-                    // Reserve scrollable space, not an opaque area below navigation.
-                    // The form and its background continue behind the floating glass.
-                    .contentMargins(.bottom, chatHeight, for: .scrollContent)
-                RecipeEditorChatView(draft: assistantDraft, session: recipeChat, expanded: $chatExpanded)
-                    .frame(height: chatExpanded ? min(380, geometry.size.height * 0.65, max(180, geometry.size.height * 0.48)) : nil)
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chatHeight = $0 }
-            }
+            editor
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    // The inset follows the keyboard and reserves scroll space.
+                    // Only the chat has a material; there is no filled footer.
+                    RecipeEditorChatView(draft: assistantDraft, session: recipeChat, expanded: $chatExpanded)
+                        .frame(height: chatExpanded ? min(380, max(180, geometry.size.height * 0.48)) : 56)
+                        .frame(maxWidth: chatExpanded ? 680 : 420)
+                        .padding(.horizontal, chatExpanded ? 12 : 24)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chatHeight = $0 }
+                }
         }
         .onAppear {
             if householdID == nil { householdID = store.activeHouseholdID }
             #if DEBUG
-            recipeChat.loadUITestProposal(draft: assistantDraft.wrappedValue)
+            recipeChat.loadUITestProposal(draft: assistantDraft.wrappedValue, collections: store.collections, householdID: store.activeHouseholdID)
             #endif
         }
         .onDisappear { task?.cancel(); recipeChat.stop() }
@@ -126,6 +126,7 @@ struct AddRecipeView: View {
                     TextField("Website URL (optional)", text: $urlText).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                 }
             }
+            .contentMargins(.bottom, chatHeight + 20, for: .scrollContent)
             .scrollContentBackground(.hidden).background(SupperStyle.canvas)
             .navigationTitle(original == nil ? "New Recipe" : "Edit Recipe").navigationBarTitleDisplayMode(.inline)
             .toolbar {
