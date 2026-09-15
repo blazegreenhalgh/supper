@@ -44,6 +44,9 @@ import XCTest
         capture(app, "Permanent floating AI bar")
         app.swipeUp()
         let source = app.textFields["Website URL (optional)"]
+        if source.frame.maxY >= chatInput(app).frame.minY {
+            app.collectionViews.firstMatch.swipeUp()
+        }
         XCTAssertTrue(source.isHittable)
         XCTAssertLessThan(source.frame.maxY, chatInput(app).frame.minY)
         let field = app.textFields["recipeChatInput"]

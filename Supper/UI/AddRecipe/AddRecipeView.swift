@@ -14,6 +14,7 @@ struct AddRecipeView: View {
     @State private var showingURLImport = false
     @State private var showingAssistant = false
     @State private var chatExpanded = false
+    @State private var chatHeight: CGFloat = 56
     @State private var showingCover = false
     @StateObject private var recipeChat = RecipeChatSession()
     @State private var errorMessage: String?
@@ -30,7 +31,6 @@ struct AddRecipeView: View {
     var body: some View {
         GeometryReader { geometry in
             editor
-                .contentMargins(.bottom, 20, for: .scrollContent)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     // The inset follows the keyboard and reserves scroll space.
                     // Only the chat has a material; there is no filled footer.
@@ -38,6 +38,7 @@ struct AddRecipeView: View {
                         .frame(height: chatExpanded ? min(380, max(180, geometry.size.height * 0.48)) : 56)
                         .frame(maxWidth: chatExpanded ? 680 : 420)
                         .padding(.horizontal, chatExpanded ? 12 : 24)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chatHeight = $0 }
                 }
         }
         .onAppear {
@@ -125,6 +126,7 @@ struct AddRecipeView: View {
                     TextField("Website URL (optional)", text: $urlText).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                 }
             }
+            .contentMargins(.bottom, chatHeight + 20, for: .scrollContent)
             .scrollContentBackground(.hidden).background(SupperStyle.canvas)
             .navigationTitle(original == nil ? "New Recipe" : "Edit Recipe").navigationBarTitleDisplayMode(.inline)
             .toolbar {
