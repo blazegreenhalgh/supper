@@ -32,7 +32,9 @@ A citation does not certify a recipe's safety or suitability. Users must still r
 
 ## Draft behavior and performance
 
-Ask AI is a floating, rounded Liquid Glass panel below the recipe editor on iOS 26, with a system material fallback. Ingredients, individual ingredient and method-step forms, tags, collections and notes remain navigable while chat is open. Minimising or closing the panel retains conversation, input, pending changes and undo history; ongoing requests continue. Stop or leaving the recipe editor cancels local work and ignores late results.
+Ask AI starts as a permanent collapsed Liquid Glass bar over the recipe editor on iOS 26, with a system material fallback. Tap the bar to expand/minimise; there is no separate entry button or close control. The editor renders behind the glass, with extra scroll-content margin so its last fields remain reachable above the bar. Ingredients, individual ingredient and method-step forms, tags, collections and notes remain navigable while chat is open. Minimising retains conversation, input, pending changes and undo history; ongoing requests continue. Stop or leaving the recipe editor cancels local work and ignores late results.
+
+Discovery centres a glass input among soft animated colour, an orbiting halo and compact inspiration chips. Loading uses the same treatment with a short status tied to the actual search stage and a Cancel action that preserves the prompt. Canvas motion pauses when inactive and becomes static with Reduce Motion. Results retain source labels, counts and decisions, with source information in the options menu. Red/green swipe feedback belongs only to the translated top card; the stationary stack stays neutral.
 
 Preview opens a read-only recipe page. Changes mode shows additions, the previous values of edits, and removed ingredients and steps with explicit labels and strikethrough. Recipe mode shows the proposed result, including source notes. Each preview targets a fixed suggestion; a newer response cannot silently replace the edit being approved.
 

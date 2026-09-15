@@ -13,8 +13,8 @@ struct AddRecipeView: View {
     @State private var tagsText: String
     @State private var showingURLImport = false
     @State private var showingAssistant = false
-    @State private var showingRecipeChat = false
-    @State private var chatExpanded = true
+    @State private var chatExpanded = false
+    @State private var chatHeight: CGFloat = 74
     @State private var showingCover = false
     @StateObject private var recipeChat = RecipeChatSession()
     @State private var errorMessage: String?
@@ -30,19 +30,23 @@ struct AddRecipeView: View {
     }
     var body: some View {
         GeometryReader { geometry in
-            VStack(spacing: 0) {
+            ZStack(alignment: .bottom) {
                 editor
-                    .frame(maxHeight: .infinity)
-                if showingRecipeChat {
-                    RecipeEditorChatView(draft: assistantDraft, session: recipeChat, expanded: $chatExpanded) {
-                        showingRecipeChat = false
-                    }
+                    // Reserve scrollable space, not an opaque area below navigation.
+                    // The form and its background continue behind the floating glass.
+                    .contentMargins(.bottom, chatHeight, for: .scrollContent)
+                RecipeEditorChatView(draft: assistantDraft, session: recipeChat, expanded: $chatExpanded)
                     .frame(height: chatExpanded ? min(380, geometry.size.height * 0.65, max(180, geometry.size.height * 0.48)) : nil)
                     .padding(.horizontal, 12).padding(.vertical, 8)
-                }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chatHeight = $0 }
             }
         }
-        .onAppear { if householdID == nil { householdID = store.activeHouseholdID } }
+        .onAppear {
+            if householdID == nil { householdID = store.activeHouseholdID }
+            #if DEBUG
+            recipeChat.loadUITestProposal(draft: assistantDraft.wrappedValue)
+            #endif
+        }
         .onDisappear { task?.cancel(); recipeChat.stop() }
     }
 
@@ -61,14 +65,6 @@ struct AddRecipeView: View {
                         }
                     }.buttonStyle(.plain)
                     TextField("Recipe name", text: $draft.title).font(.title3.weight(.semibold))
-                    Button("Ask AI", systemImage: "sparkles") {
-                        chatExpanded = true; showingRecipeChat = true
-                        #if DEBUG
-                        recipeChat.loadUITestProposal(draft: assistantDraft.wrappedValue)
-                        #endif
-                    }
-                        .font(.subheadline).foregroundStyle(.primary)
-                        .accessibilityIdentifier("askRecipeAI")
                     Button("Generate cover", systemImage: "photo") { showingCover = true }
                         .font(.subheadline).foregroundStyle(.primary)
                         .accessibilityIdentifier("generateRecipeCover")
