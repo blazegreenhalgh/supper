@@ -28,6 +28,9 @@ final class RecipeDiscoveryModel: ObservableObject {
                 let result: RecipeDiscoveryResult
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("--discovery-ui-testing") {
+                    if ProcessInfo.processInfo.arguments.contains("--discovery-loading-ui-testing") {
+                        try await Task.sleep(for: .seconds(30))
+                    }
                     result = Self.fixture
                 } else {
                     result = try await RecipeDiscoveryService().discover(text, mode: mode) { [weak self] message in
@@ -96,6 +99,7 @@ struct RecipeDiscoveryView: View {
     @State private var showingStartOver = false
     @State private var feedback = 0
     @State private var swipingRecipe = false
+    @State private var showingSourceInfo = false
     @FocusState private var promptFocused: Bool
 
     var body: some View {
@@ -105,8 +109,11 @@ struct RecipeDiscoveryView: View {
                 else if model.hasResults { results }
                 else { requestForm }
             }
-            .background(SupperStyle.canvas)
-            .navigationTitle(model.hasResults ? "Fresh ideas" : "What are you craving?")
+            .background {
+                SupperStyle.canvas
+                if !model.hasResults || model.busy { DiscoveryAtmosphere() }
+            }
+            .navigationTitle(model.hasResults && !model.busy ? "Fresh ideas" : "")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -125,6 +132,7 @@ struct RecipeDiscoveryView: View {
                             }
                             Button("Undo last discard", systemImage: "arrow.uturn.backward") { model.undoDiscard() }
                                 .disabled(model.review.discardedIDs.isEmpty)
+                            Button("About these recipes", systemImage: "info.circle") { showingSourceInfo = true }
                         }
                     }
                 }
@@ -141,6 +149,9 @@ struct RecipeDiscoveryView: View {
                 Button("Discard remaining ideas", role: .destructive) { model.startOver() }
             } message: { Text("Recipes you kept are already saved. The remaining ideas will be discarded.") }
             .supperError($model.error, title: "Couldn’t finish that")
+            .alert("From the web", isPresented: $showingSourceInfo) {
+                Button("OK", role: .cancel) { }
+            } message: { Text(model.notice ?? "Published recipes, with a source link on each card. Only recipes you keep are saved.") }
             .sensoryFeedback(.success, trigger: feedback)
         }
         .presentationDragIndicator(.visible)
@@ -148,71 +159,86 @@ struct RecipeDiscoveryView: View {
     }
 
     private var requestForm: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Image(systemName: "sparkles").font(.largeTitle).foregroundStyle(.tint)
-                    Text("Let’s find your next favourite.").font(.largeTitle.bold())
-                    Text("A dish, a mood, a few ingredients. Tell Supper what sounds good.")
-                        .foregroundStyle(.secondary)
-                }
-                TextField("Something cosy with chicken, under 30 minutes…", text: $model.prompt, axis: .vertical)
-                    .lineLimit(3...6).padding(16).background(SupperStyle.surface, in: .rect(cornerRadius: 20))
-                    .focused($promptFocused).accessibilityIdentifier("discoveryPrompt")
-                Text("Find published recipes across the web, with source links, photos, ingredients and methods. Supper never generates recipes. Only recipes you keep join your library.")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                if !aiSettings.isConfigured {
-                    Text("Add your OpenAI API key to search. Your request is sent to OpenAI, and recipes are downloaded from their publishers.")
-                        .font(.footnote).foregroundStyle(.secondary)
-                    NavigationLink("Set up OpenAI") { AISettingsView() }
-                }
-                Button { promptFocused = false; model.search(in: store) } label: {
-                    Label("Find my recipes", systemImage: "sparkles").frame(maxWidth: .infinity)
-                }.supperGlassButton(prominent: true).controlSize(.large)
-                    .disabled(model.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.prompt.count > 600 || !canSearch)
-                    .accessibilityIdentifier("findDiscoveryRecipes")
-                if model.prompt.count > 600 { Text("Keep your request under 600 characters.").font(.footnote).foregroundStyle(.red) }
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Need a little inspiration?").font(.headline)
-                    ForEach(["A cosy one-pot dinner", "Quick chicken with a bit of spice", "Something fresh and vegetarian"], id: \.self) { idea in
-                        Button { model.prompt = idea; promptFocused = false } label: {
-                            Label(idea, systemImage: "arrow.up.left").frame(maxWidth: .infinity, alignment: .leading)
-                        }.buttonStyle(.borderless).font(.subheadline)
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 24) {
+                    DiscoveryHalo(searching: false).frame(width: 160, height: 130)
+                    Text("What are you\ncraving?")
+                        .font(.largeTitle.bold()).multilineTextAlignment(.center)
+                    VStack(spacing: 16) {
+                        HStack(alignment: .center, spacing: 12) {
+                            TextField("A dish, a mood, an ingredient…", text: $model.prompt, axis: .vertical)
+                                .lineLimit(1...4).font(.title3).multilineTextAlignment(.center)
+                                .focused($promptFocused).accessibilityIdentifier("discoveryPrompt")
+                                .accessibilityLabel("What are you craving?")
+                            Button { promptFocused = false; model.search(in: store) } label: {
+                                Image(systemName: "arrow.up").font(.headline).frame(minWidth: 24, minHeight: 28)
+                            }.supperGlassButton(prominent: true).controlSize(.large)
+                                .accessibilityLabel("Find recipes").accessibilityIdentifier("findDiscoveryRecipes")
+                                .disabled(model.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.prompt.count > 600 || !canSearch)
+                        }
+                        .padding(14).padding(.leading, 6).frame(minHeight: 84)
+                        .supperGlassPanel()
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 28)
+                                .strokeBorder(LinearGradient(colors: [.purple.opacity(0.25), .pink.opacity(0.35), .mint.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
+                                .allowsHitTesting(false)
+                        }
+                        if model.prompt.count > 600 { Text("600 characters max.").font(.caption).foregroundStyle(.red) }
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 10) { inspiration }
+                            VStack(spacing: 10) { inspiration }
+                        }
+                    }
+                    if !canSearch {
+                        NavigationLink("Set up OpenAI", destination: AISettingsView()).font(.subheadline)
+                    } else {
+                        Text("Real recipes. A little inspiration.").font(.caption).foregroundStyle(.secondary)
                     }
                 }
-            }.padding(24).frame(maxWidth: 600).frame(maxWidth: .infinity)
-        }.scrollDismissesKeyboard(.interactively)
+                .padding(.horizontal, 24).padding(.vertical, 28)
+                .frame(maxWidth: 600).frame(maxWidth: .infinity)
+                .frame(minHeight: geometry.size.height)
+            }.scrollDismissesKeyboard(.interactively).accessibilityIdentifier("discoveryRequest")
+        }
+    }
+
+    private var inspiration: some View {
+        ForEach(Array(zip(["Cosy", "Quick", "Fresh"], ["A cosy one-pot dinner", "Quick chicken with a bit of spice", "Something fresh and vegetarian"])), id: \.0) { label, idea in
+            Button { model.prompt = idea; promptFocused = false } label: { Text(label).font(.subheadline) }
+                .supperGlassButton().accessibilityLabel(idea)
+        }
     }
 
     private var loading: some View {
-        VStack(spacing: 22) {
-            Image(systemName: "fork.knife.circle").font(.system(size: 70, weight: .light)).foregroundStyle(.tint)
-                .symbolEffect(.pulse, options: .repeating, isActive: !reduceMotion)
-            ProgressView(model.progress).accessibilityIdentifier("discoveryProgress")
-            Text(model.mode == .online ? "Checking the ingredients, finding the good stuff." : "A little inspiration is on its way.")
-                .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            Button("Cancel") { model.cancel() }.supperGlassButton()
-        }.padding(32).frame(maxWidth: .infinity, maxHeight: .infinity)
+        VStack(spacing: 24) {
+            DiscoveryHalo(searching: true).frame(width: 240, height: 210)
+            Text("Finding your\nnext favourite.").font(.largeTitle.bold()).multilineTextAlignment(.center)
+            ProgressView(loadingLabel).font(.subheadline).foregroundStyle(.secondary)
+                .accessibilityIdentifier("discoveryProgress").accessibilityValue(model.progress)
+            Button("Cancel") { model.cancel() }.supperGlassButton().accessibilityIdentifier("cancelDiscoverySearch")
+        }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var loadingLabel: String {
+        if model.progress.contains("photos") { return "Adding the finishing touches…" }
+        if model.progress.contains("Checking") { return "Picking your matches…" }
+        if model.progress.contains("Reading") { return "Reading the recipes…" }
+        return "Searching the web…"
     }
 
     private var results: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(model.prompt).font(.title2.bold()).fixedSize(horizontal: false, vertical: true)
-                    HStack {
-                        Text("\(model.review.pending.count) to explore").foregroundStyle(.secondary)
-                        Spacer()
-                        Label("\(model.review.keptIDs.count) kept", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                            .accessibilityIdentifier("discoveryKeptCount")
-                    }.font(.subheadline).contentTransition(.numericText())
-                    if let notice = model.notice { Text(notice).font(.footnote).foregroundStyle(.secondary) }
-                }
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    Text("\(model.review.pending.count) to try").foregroundStyle(.secondary)
+                    Spacer()
+                    Label("\(model.review.keptIDs.count) kept", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        .accessibilityIdentifier("discoveryKeptCount")
+                }.font(.subheadline).contentTransition(.numericText())
                 if model.review.pending.isEmpty { finished }
                 else if gridView { grid }
                 else {
-                    Text("Tap to explore. Swipe left to pass, right to keep.")
-                        .font(.footnote).foregroundStyle(.secondary)
                     RecipeDiscoveryStack(suggestions: Array(model.review.pending.prefix(3)), isSwiping: $swipingRecipe, open: { path.append($0) }, keep: keep, discard: discard)
                     if !model.review.discardedIDs.isEmpty {
                         Button("Undo last discard", systemImage: "arrow.uturn.backward") { model.undoDiscard() }
@@ -247,8 +273,6 @@ struct RecipeDiscoveryView: View {
     private var finished: some View {
         ContentUnavailableView {
             Label(model.review.keptIDs.isEmpty ? "Not quite your flavour?" : "Good taste.", systemImage: model.review.keptIDs.isEmpty ? "fork.knife" : "checkmark.seal")
-        } description: {
-            Text(model.review.keptIDs.isEmpty ? "Try another craving for a fresh stack of ideas." : "\(model.review.keptIDs.count) recipes are now in your shared library.")
         } actions: {
             Button("Find more ideas", systemImage: "sparkles") { model.startOver() }.supperGlassButton(prominent: true)
             if !model.review.discardedIDs.isEmpty { Button("Undo last discard", systemImage: "arrow.uturn.backward") { model.undoDiscard() } }
@@ -261,6 +285,74 @@ struct RecipeDiscoveryView: View {
     }
     private func discard(_ id: UUID) {
         withAnimation(reduceMotion ? nil : .snappy) { model.discard(id) }
+    }
+}
+
+/// Quiet colour and motion around the native controls. Canvas keeps the animation
+/// out of layout and accessibility; it pauses offscreen and respects Reduce Motion.
+private struct DiscoveryAtmosphere: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || scenePhase != .active)) { timeline in
+            Canvas { context, size in
+                let time = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate / 9
+                let colours: [Color] = [.pink, .purple, .mint]
+                for index in 0..<3 {
+                    let phase = time + Double(index) * 2.1
+                    let centre = CGPoint(x: size.width * (0.5 + 0.26 * sin(phase)),
+                                         y: size.height * (0.47 + 0.16 * cos(phase * 0.8)))
+                    let radius = min(size.width, size.height) * 0.72
+                    let circle = Path(ellipseIn: CGRect(x: centre.x - radius, y: centre.y - radius, width: radius * 2, height: radius * 2))
+                    context.fill(circle, with: .radialGradient(Gradient(colors: [colours[index].opacity(colorScheme == .dark ? 0.18 : 0.14), .clear]),
+                                                              center: centre, startRadius: 0, endRadius: radius))
+                }
+            }
+        }.ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true)
+    }
+}
+
+private struct DiscoveryHalo: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    let searching: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || scenePhase != .active)) { timeline in
+            Canvas { context, size in
+                let time = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate / (searching ? 3 : 6)
+                let centre = CGPoint(x: size.width / 2, y: size.height / 2)
+                let radius = min(size.width, size.height) * 0.32
+                let colours: [Color] = [.mint, .purple, .pink]
+                for index in 0..<3 {
+                    let phase = time + Double(index) * .pi * 2 / 3
+                    let glow = CGPoint(x: centre.x + cos(phase) * radius * 0.35, y: centre.y + sin(phase) * radius * 0.35)
+                    let spread = radius * (1.5 + 0.1 * sin(time))
+                    context.fill(Path(ellipseIn: CGRect(x: glow.x - spread, y: glow.y - spread, width: spread * 2, height: spread * 2)),
+                                 with: .radialGradient(Gradient(colors: [colours[index].opacity(0.3), .clear]), center: glow, startRadius: 0, endRadius: spread))
+                }
+                context.stroke(Path(ellipseIn: CGRect(x: centre.x - radius, y: centre.y - radius, width: radius * 2, height: radius * 2)),
+                               with: .linearGradient(Gradient(colors: [.mint.opacity(0.6), .pink.opacity(0.1), .purple.opacity(0.5)]),
+                                                     startPoint: .zero, endPoint: CGPoint(x: size.width, y: size.height)), lineWidth: 1)
+                for index in 0..<8 {
+                    let phase = time + Double(index) * .pi / 4
+                    let orbit = radius * (index.isMultiple(of: 2) ? 1.1 : 1.4)
+                    let point = CGPoint(x: centre.x + cos(phase) * orbit, y: centre.y + sin(phase) * orbit * 0.85)
+                    let diameter = index.isMultiple(of: 3) ? 5.0 : 3.0
+                    context.fill(Path(ellipseIn: CGRect(x: point.x - diameter / 2, y: point.y - diameter / 2, width: diameter, height: diameter)),
+                                 with: .color(colours[index % 3].opacity(0.7)))
+                }
+            }
+        }
+        .overlay {
+            Image(systemName: searching ? "sparkle.magnifyingglass" : "sparkles")
+                .font(.system(size: searching ? 42 : 32, weight: .light))
+                .foregroundStyle(.primary)
+                .symbolEffect(.breathe, options: .repeating, isActive: searching && !reduceMotion && scenePhase == .active)
+        }
+        .allowsHitTesting(false).accessibilityHidden(true)
     }
 }
 
@@ -292,12 +384,6 @@ private struct RecipeDiscoveryStack: View {
                         .accessibilityHidden(index != 0)
                 }
             }
-            .background {
-                RoundedRectangle(cornerRadius: 36)
-                    .fill(decisionColor.opacity(decisionProgress * 0.25))
-                    .padding(-10)
-                    .allowsHitTesting(false)
-            }
             .padding(.bottom, 24)
             if let top = suggestions.first {
                 SupperGlassGroup {
@@ -306,7 +392,7 @@ private struct RecipeDiscoveryStack: View {
                             .accessibilityIdentifier("discardDiscoveryRecipe")
                         Button("Keep recipe", systemImage: "checkmark") { decide(top, keeping: true) }.supperGlassButton(prominent: true)
                             .accessibilityIdentifier("keepDiscoveryRecipe")
-                    }.controlSize(.large)
+                    }.labelStyle(.iconOnly).buttonBorderShape(.circle).controlSize(.large)
                 }
             }
         }

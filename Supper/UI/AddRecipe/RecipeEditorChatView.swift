@@ -177,10 +177,10 @@ struct RecipeChatMessage: Identifiable {
 }
 
 struct RecipeEditorChatView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var draft: RecipeDraft
     @ObservedObject var session: RecipeChatSession
     @Binding var expanded: Bool
-    let close: () -> Void
     @FocusState private var inputFocused: Bool
     @State private var reviewing: RecipeAssistantProposal?
     @State private var reviewingPhoto: RecipePhotoProposal?
@@ -247,7 +247,8 @@ struct RecipeEditorChatView: View {
     private var header: some View {
         HStack(spacing: 8) {
             Button {
-                inputFocused = false; expanded.toggle()
+                inputFocused = false
+                withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) { expanded.toggle() }
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "sparkles")
@@ -257,12 +258,12 @@ struct RecipeEditorChatView: View {
                         else if !session.photos.isEmpty { Text("Photo ready").font(.caption2).foregroundStyle(.secondary) }
                         else if let pending = session.pending { Text("\(pending.changes.count) suggested changes").font(.caption2).foregroundStyle(.secondary) }
                     }
+                    Spacer(minLength: 8)
                     Image(systemName: expanded ? "chevron.down" : "chevron.up").font(.caption)
-                }.frame(minHeight: 44)
+                }.frame(maxWidth: .infinity, minHeight: 44).contentShape(.rect)
             }.buttonStyle(.plain)
                 .accessibilityLabel(expanded ? "Minimise Ask AI" : "Expand Ask AI")
                 .accessibilityIdentifier("toggleRecipeChat")
-            Spacer(minLength: 0)
             if let photo = session.photos.first {
                 Button("Preview") { inputFocused = false; reviewingPhoto = photo }
                     .supperGlassButton().accessibilityIdentifier("reviewChatPhoto")
@@ -274,18 +275,12 @@ struct RecipeEditorChatView: View {
                     .supperGlassButton().disabled(session.editingField != nil)
                     .accessibilityLabel("Undo last AI edit").accessibilityIdentifier("undoRecipeAIEdit")
             }
-            Button("Close chat", systemImage: "xmark") { inputFocused = false; close() }
-                .labelStyle(.iconOnly).frame(width: 44, height: 44)
-                .tint(.primary)
-                .accessibilityIdentifier("closeRecipeChat")
         }.padding(.horizontal, 16).padding(.vertical, 7)
     }
 
     private var introduction: some View {
         VStack(alignment: .leading, spacing: 12) {
             if aiSettings.isConfigured {
-                Text("Ask for recipe edits, an online photo, or a generated cover. You can also polish your own food photo.")
-                    .font(.subheadline).foregroundStyle(.secondary)
                 if session.messages.isEmpty {
                     ForEach(suggestions, id: \.self) { text in
                         Button(text) { session.input = text; inputFocused = true }
@@ -293,8 +288,6 @@ struct RecipeEditorChatView: View {
                     }
                 }
             } else {
-                Text("Connect your OpenAI API key to search published recipes and suggest edits. Requests and relevant recipe content are sent to OpenAI.")
-                    .font(.subheadline).foregroundStyle(.secondary)
                 Button("Set up OpenAI", systemImage: "key") { showingAISettings = true }
             }
         }
