@@ -14,6 +14,7 @@ struct AddRecipeView: View {
     @State private var showingURLImport = false
     @State private var showingAssistant = false
     @State private var showingRecipeChat = false
+    @State private var chatExpanded = true
     @State private var showingCover = false
     @StateObject private var recipeChat = RecipeChatSession()
     @State private var errorMessage: String?
@@ -28,6 +29,23 @@ struct AddRecipeView: View {
         _tagsText = State(initialValue: recipe?.tags.joined(separator: ", ") ?? "")
     }
     var body: some View {
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                editor
+                    .frame(maxHeight: .infinity)
+                if showingRecipeChat {
+                    RecipeEditorChatView(draft: assistantDraft, session: recipeChat, expanded: $chatExpanded) {
+                        showingRecipeChat = false
+                    }
+                    .frame(height: chatExpanded ? min(380, geometry.size.height * 0.65, max(180, geometry.size.height * 0.48)) : 58)
+                }
+            }
+        }
+        .onAppear { if householdID == nil { householdID = store.activeHouseholdID } }
+        .onDisappear { task?.cancel(); recipeChat.stop() }
+    }
+
+    private var editor: some View {
         NavigationStack {
             Form {
                 Section {
@@ -42,7 +60,12 @@ struct AddRecipeView: View {
                         }
                     }.buttonStyle(.plain)
                     TextField("Recipe name", text: $draft.title).font(.title3.weight(.semibold))
-                    Button("Ask AI", systemImage: "sparkles") { showingRecipeChat = true }
+                    Button("Ask AI", systemImage: "sparkles") {
+                        chatExpanded = true; showingRecipeChat = true
+                        #if DEBUG
+                        recipeChat.loadUITestProposal(draft: assistantDraft.wrappedValue)
+                        #endif
+                    }
                         .font(.subheadline).foregroundStyle(.primary)
                         .accessibilityIdentifier("askRecipeAI")
                     Button("Generate cover", systemImage: "photo") { showingCover = true }
@@ -62,12 +85,16 @@ struct AddRecipeView: View {
                 }
                 Section("Recipe") {
                     NavigationLink {
-                        IngredientListEditor(ingredients: $draft.ingredients, sourceURL: URL(string: urlText))
+                        IngredientListEditor(ingredients: $draft.ingredients, sourceURL: URL(string: urlText)) {
+                            recipeChat.editingField = $0 ? "ingredient" : nil
+                        }
                     } label: {
                         editorLink("Ingredients", systemImage: "carrot", detail: draft.ingredients.isEmpty ? "Add" : "\(draft.ingredients.count) items")
                     }.accessibilityIdentifier("editIngredients")
                     NavigationLink {
-                        MethodListEditor(steps: $draft.steps)
+                        MethodListEditor(steps: $draft.steps) {
+                            recipeChat.editingField = $0 ? "step" : nil
+                        }
                     } label: {
                         editorLink("Method", systemImage: "list.number", detail: draft.steps.isEmpty ? "Add" : "\(draft.steps.count) steps")
                     }.accessibilityIdentifier("editMethod")
@@ -108,8 +135,6 @@ struct AddRecipeView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { task?.cancel(); dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button(onSaveDraft == nil ? "Save" : "Done", action: save).disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
             }
-            .onAppear { if householdID == nil { householdID = store.activeHouseholdID } }
-            .onDisappear { task?.cancel() }
             .onChange(of: photoItem) { _, item in
                 task?.cancel(); task = Task {
                     do {
@@ -121,7 +146,6 @@ struct AddRecipeView: View {
             }
             .sheet(isPresented: $showingURLImport) { URLImportView(onImported: imported) }
             .sheet(isPresented: $showingAssistant) { RecipeAssistanceView(onImported: imported) }
-            .sheet(isPresented: $showingRecipeChat) { RecipeEditorChatView(draft: assistantDraft, session: recipeChat) }
             .sheet(isPresented: $showingCover) { RecipeCoverView(draft: assistantDraft) }
             .supperError($errorMessage, title: "Couldn't save changes")
         }

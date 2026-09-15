@@ -28,7 +28,11 @@ A citation does not certify a recipe's safety or suitability. Users must still r
 
 ## Draft behavior and performance
 
-Ask AI belongs to the editor session. Closing/reopening retains conversation, input, pending changes and undo history. Apply changes the unsaved draft, Save commits it; Cancel discards it. Stale proposals and undo are rejected if the draft has changed. Closing/stopping requests cancels local work and ignores late results.
+Ask AI is a collapsible panel below the recipe editor. Ingredients, individual ingredient and method-step forms, tags, collections and notes remain navigable while chat is open. Minimising or closing the panel retains conversation, input, pending changes and undo history; ongoing requests continue. Stop or leaving the recipe editor cancels local work and ignores late results.
+
+Preview opens a read-only recipe page. Changes mode shows additions, the previous values of edits, and removed ingredients and steps with explicit labels and strikethrough. Recipe mode shows the proposed result, including source notes. Each preview targets a fixed suggestion; a newer response cannot silently replace the edit being approved.
+
+Apply changes the unsaved draft, Save commits it; Cancel discards it. Suggestions remain previewable after manual changes, but Apply requires a matching draft and a new request starts from the latest manual edits. Apply and Undo are disabled while an individual ingredient or step form has unfinished input. Undo is also rejected after newer draft edits.
 
 Research reads up to eight pages, three at a time, and batches relevance checks instead of running a model session per candidate. An in-memory cache retains up to 16 public recipe pages for ten minutes to speed follow-ups. It stores no keys or private drafts. Context/output sizes are bounded, with no silent truncation of accepted source recipes. Failed/partial/refused responses never apply. Automatic paid retries are intentionally avoided.
 
@@ -44,7 +48,7 @@ API billing is separate from ChatGPT. Show clear errors for invalid/restricted k
 
 Mocked transport tests cover model IDs, structured output, required search, source provenance, malformed/refused/incomplete responses, sanitized billing errors, key input validation, connection testing and image responses. Evidence tests reject invented ingredient amounts and altered/incomplete method steps. Existing draft/undo, quantity, formatting and discovery regressions remain.
 
-UI coverage includes opening AI settings, saving/replacing/removing a fixture key, persistence across app relaunch, and existing chat/discovery flows. No real key or live generation is needed for CI.
+UI coverage includes opening AI settings, saving/replacing/removing a fixture key, persistence across app relaunch, chat alongside ingredient/step navigation, preview removals, stale and unfinished-edit protection, apply/undo, and existing discovery flows. A deterministic proposal is available only in DEBUG builds with both `--ui-testing` and `--recipe-chat-ui-testing`. No real key or live generation is needed for CI.
 
 CI ad-hoc-signs simulator builds with `Tests/UI/Simulator.entitlements` so real Keychain operations have an app identity. This simulator-only identity is passed by the workflow, never used by device or distribution builds. The focused Keychain test runs before the remaining UI suite for faster diagnostics; shipping signing and Keychain protection are unchanged.
 
