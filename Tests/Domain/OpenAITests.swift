@@ -108,6 +108,46 @@ import FoundationNetworking
         await #expect(throws: (any Error).self) { try await client.generateCover(prompt: "naan") }
     }
 
+    @Test func foodPhotoEditUsesUploadedBytesAndHighFidelityEditingEndpoint() async throws {
+        let original = Data([0xff, 0xd8, 1, 2, 3, 0xff, 0xd9])
+        let edited = Data([4, 5, 6])
+        let client = try makeClient { request in
+            #expect(request.url?.path == "/v1/images/edits")
+            let body = try Self.body(request)
+            #expect(body["model"] as? String == "gpt-image-2.5-sunburst")
+            #expect(body["input_fidelity"] as? String == "high")
+            #expect(body["n"] as? Int == 1)
+            #expect((body["images"] as? [[String: String]]) == [["image_url": "data:image/jpeg;base64,\(original.base64EncodedString())"]])
+            return (200, try JSONSerialization.data(withJSONObject: ["data": [["b64_json": edited.base64EncodedString()]]]))
+        }
+        #expect(try await client.enhanceFoodPhoto(jpeg: original, prompt: "Preserve the food; improve lighting.") == edited)
+    }
+
+    @Test func invalidPhotoInputNeverSendsAnEditRequest() async throws {
+        let client = try makeClient { _ in Issue.record("Invalid photo reached transport"); return (500, Data()) }
+        await #expect(throws: (any Error).self) { try await client.enhanceFoodPhoto(jpeg: Data(), prompt: "Polish") }
+        await #expect(throws: (any Error).self) { try await client.enhanceFoodPhoto(jpeg: Data([1]), prompt: "") }
+    }
+
+    @Test func photoRoutingUsesAnExplicitActionAndRejectsUnknownActions() async throws {
+        let client = try makeClient { request in
+            #expect(request.url?.path == "/v1/responses")
+            let body = try Self.body(request)
+            #expect(body["tools"] == nil)
+            let format = (body["text"] as? [String: Any])?["format"] as? [String: Any]
+            let schema = format?["schema"] as? [String: Any]
+            let properties = schema?["properties"] as? [String: Any]
+            let action = properties?["action"] as? [String: Any]
+            #expect(action?["enum"] as? [String] == ["recipe", "find_photo", "generate_photo", "enhance_photo", "choose_photo"])
+            return (200, Data(#"{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"{\"action\":\"find_photo\"}"}]}]}"#.utf8))
+        }
+        #expect(try await client.recipeChatAction(request: "Find a real photo online; don't generate one", conversation: "") == .findPhoto)
+        let invalid = try makeClient { _ in
+            (200, Data(#"{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"{\"action\":\"invent_recipe\"}"}]}]}"#.utf8))
+        }
+        await #expect(throws: (any Error).self) { try await invalid.recipeChatAction(request: "Photo please", conversation: "") }
+    }
+
     @Test func recipeAdditionsMustMatchSourceRows() throws {
         let source = RecipeDraft(title: "Naan", ingredients: [Ingredient(name: "Flour", quantity: "300", unit: "g")], steps: [RecipeStep(text: "Mix and rest for 30 minutes.")])
         let draft = RecipeDraft(title: "Naan pizza", ingredients: [Ingredient(name: "Cheese", quantity: "100", unit: "g")])

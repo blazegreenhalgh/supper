@@ -33,6 +33,14 @@ extension View {
             self.background(.regularMaterial, in: .capsule)
         }
     }
+    @ViewBuilder
+    func supperGlassPanel() -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(.regular, in: .rect(cornerRadius: 28))
+        } else {
+            self.background(.regularMaterial, in: .rect(cornerRadius: 28))
+        }
+    }
 }
 
 struct SupperGlassGroup<Content: View>: View {

@@ -135,6 +135,38 @@ import XCTest
         return app
     }
 
+    func testRecipePhotosPreviewOriginalAndApplyWithUndoAndUploadOption() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing", "--recipe-photo-ui-testing"]
+        app.launch()
+        XCTAssertTrue(app.buttons["recipe-test-chicken"].waitForExistence(timeout: 15))
+        openRecipe(app); app.buttons["editRecipe"].tap(); app.buttons["askRecipeAI"].tap()
+        XCTAssertTrue(app.buttons["reviewChatPhoto"].waitForExistence(timeout: 5))
+        capture(app, "Liquid Glass chat with photo options")
+        app.scrollViews["chatPhotoCarousel"].swipeLeft()
+        app.buttons["previewChatPhoto-2"].tap()
+        XCTAssertTrue(app.segmentedControls["photoComparison"].waitForExistence(timeout: 5))
+        app.segmentedControls["photoComparison"].buttons["Original"].tap()
+        app.segmentedControls["photoComparison"].buttons["Edited"].tap()
+        XCTAssertTrue(app.staticTexts["recipePhotoCaption"].label.contains("AI-edited"))
+        capture(app, "Uploaded food photo comparison")
+        app.buttons["closePhotoPreview"].tap()
+        app.buttons["reviewChatPhoto"].tap()
+        XCTAssertTrue(app.staticTexts["recipePhotoCaption"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["recipePhotoCaption"].label.contains("UI test photo source"))
+        capture(app, "Online photo preview with source credit")
+        app.buttons["applyRecipePhoto"].tap()
+        XCTAssertTrue(app.buttons["undoRecipeAIEdit"].waitForExistence(timeout: 5))
+        app.buttons["undoRecipeAIEdit"].tap()
+        XCTAssertFalse(app.buttons["undoRecipeAIEdit"].exists)
+        app.buttons["chatPhotoOptions"].tap()
+        app.buttons["Polish my food photo"].tap()
+        XCTAssertTrue(app.buttons["uploadFoodPhoto"].waitForExistence(timeout: 5))
+        capture(app, "Editorial food photo upload option")
+        app.buttons["Done"].tap(); app.buttons["closeRecipeChat"].tap(); app.buttons["Cancel"].tap()
+        XCTAssertTrue(app.buttons["editRecipe"].waitForExistence(timeout: 5))
+    }
+
     func testDiscoveryEditsStayDraftUntilKeptAndGridSharesDecisions() {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "--discovery-ui-testing"]
