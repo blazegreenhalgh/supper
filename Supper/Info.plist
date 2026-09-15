@@ -7,6 +7,10 @@
         <key>UTTypeIdentifier</key><string>app.supper.recipe-card</string>
         <key>UTTypeDescription</key><string>Supper recipe card</string>
         <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+    </dict><dict>
+        <key>UTTypeIdentifier</key><string>app.supper.recipe-content</string>
+        <key>UTTypeDescription</key><string>Supper recipe section content</string>
+        <key>UTTypeConformsTo</key><array><string>public.data</string></array>
     </dict></array>
     <key>CKSharingSupported</key><true/>
     <key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
