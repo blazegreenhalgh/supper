@@ -41,3 +41,15 @@ The repository's macOS CI passed the domain and persistence tests, including the
 - [Deploying an iCloud Container’s Schema](https://developer.apple.com/documentation/cloudkit/deploying-an-icloud-container-s-schema) — reviewing and deploying additive development schema changes.
 
 - [Reading CloudKit Records for Core Data](https://developer.apple.com/documentation/coredata/reading-cloudkit-records-for-core-data) — record names, attribute types, asset companions and relationship fields.
+
+## Missing invitation recovery — 15 September 2026
+
+A missing result from `fetchShares(matching:)` previously blocked leaving an incoming library, and could send invitation creation down the new-share path even when a share already existed. Sharing now checks the store cache against the exact record zone and owner, then reads that zone’s share reference from CloudKit. It never selects an arbitrary invitation by title or from the store. Share creation and local share persistence wait for Core Data’s callback even when the UI task is cancelled, preventing overlapping mutations on retry.
+
+Participant removal can purge the known zone from `recordID(for:)` without a cached CKShare. A purge is blocked when another root has the same zone or an unresolved identity. When the incoming root itself has no CloudKit identity, the library menu offers **Hide on this iPhone**, with explicit confirmation and **Show hidden libraries** to undo it. Hiding changes a local preference only: it does not delete the owner’s managed graph or revoke access. Hidden roots stay excluded from selection, including after another library is deleted.
+
+Core Data messages include the error code and available failure/debug reason. Diagnostics retain the sharing operation, app version/build, multiple underlying errors and preceding sync failures. A failed membership save rolls back its pending changes, and incomplete invitation matching no longer blocks the local cookbook from refreshing.
+
+Regression coverage includes exact-zone/owner lookup, missing/failed cache recovery, known-zone participant removal, ambiguous purge rejection, reversible hiding with unchanged owner records, selection after deletion and detailed nested errors. Live two-account TestFlight verification remains necessary; the screenshot’s generic Core Data message alone does not identify its exact underlying error.
+
+Apple API references: [record IDs](https://developer.apple.com/documentation/coredata/nspersistentcloudkitcontainer/recordidformanagedobjectid:), [cached shares](https://developer.apple.com/documentation/coredata/nspersistentcloudkitcontainer/fetchsharesinpersistentstore:error:), [zone purge](https://developer.apple.com/documentation/coredata/nspersistentcloudkitcontainer/purgeobjectsandrecordsinzonewithid:inpersistentstore:completion:).

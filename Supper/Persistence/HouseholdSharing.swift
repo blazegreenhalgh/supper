@@ -11,7 +11,7 @@ extension RecipeStore {
         catch {
             if !(error is CancellationError) {
                 cloudAccountMessage = CloudProblem.message(error)
-                cloudDiagnostics = CloudProblem.diagnostics(error)
+                recordCloudError(error, operation: "Checking iCloud account")
             }
         }
     }
@@ -46,13 +46,14 @@ extension RecipeStore {
 
     func reportSharingError(_ error: Error) {
         sharingMessage = CloudProblem.message(error)
-        cloudDiagnostics = CloudProblem.diagnostics(error)
+        recordCloudError(error, operation: shareProgress ?? "Household sharing")
     }
 
     func prepareShare() async throws -> CKShare {
         guard !checkingCloudAccount, removingHouseholdID == nil, shareProgress == nil else {
             throw SupperError.invalid("Wait for the current iCloud action to finish.")
         }
+        defer { shareProgress = nil }
         do {
             let share = try await createOrFetchShare()
             sharingMessage = nil
@@ -70,19 +71,14 @@ extension RecipeStore {
         }
         let rootID = root.objectID; let householdID = root.id
         let incoming = persistentStore == persistence.sharedStore
-        shareProgress = "Checking iCloud…"; defer { shareProgress = nil }
+        shareProgress = "Checking iCloud…"
         try await verifyCloudAccount(); try Task.checkCancellation()
         let container = persistence.container
         let context = container.newBackgroundContext()
         let cloud = CKContainer(identifier: persistence.containerIdentifier)
         let database = incoming ? cloud.sharedCloudDatabase : cloud.privateCloudDatabase
         shareProgress = "Reading invitation…"
-        let existing: CKShare? = try await CloudRequest.run { completion in
-            context.perform { @Sendable in
-                do { completion(.success(try container.fetchShares(matching: [rootID])[rootID])) }
-                catch { completion(.failure(error)) }
-            }
-        }
+        let existing = try await resolveShare(for: rootID, in: persistentStore, database: database)
         var invitation: CKShare
         if let existing {
             do {
@@ -96,7 +92,9 @@ extension RecipeStore {
         } else {
             guard !incoming else { throw SupperError.invalid("Sharing access has changed. Ask the household owner for a new invitation.") }
             shareProgress = "Preparing household…"
-            invitation = try await CloudRequest.run { completion in
+            // Cancelling the UI task cannot cancel Core Data's move to a shared zone.
+            // Keep the action locked until the callback, so retries cannot overlap it.
+            invitation = try await CloudRequest.untilFinished { completion in
                 context.perform { @Sendable in
                     do {
                         let root = try context.existingObject(with: rootID)
@@ -126,6 +124,45 @@ extension RecipeStore {
         guard activeHouseholdID == householdID else { throw SupperError.invalid("The selected household changed. Open its invitation again.") }
         return invitation
     }
+
+    /// Resolve only shares tied to this object's exact zone, never an arbitrary
+    /// invitation from the store. A partial/old invitation cache is not proof that
+    /// the library is unshared.
+    func cachedShare(for objectID: NSManagedObjectID, in store: NSPersistentStore) throws -> CKShare? {
+        let container = persistence.container
+        return try HouseholdCloudLookup.cachedShare(
+            matching: { try container.fetchShares(matching: [objectID])[objectID] },
+            recordID: { container.recordID(for: objectID) },
+            shares: { try container.fetchShares(in: store) })
+    }
+
+    private func resolveShare(for objectID: NSManagedObjectID, in store: NSPersistentStore,
+                              database: CKDatabase) async throws -> CKShare? {
+        var lookupError: Error?
+        do {
+            if let share = try cachedShare(for: objectID, in: store) { return share }
+        } catch { lookupError = error }
+        guard let recordID = persistence.container.recordID(for: objectID) else {
+            if let lookupError { throw lookupError }
+            return nil
+        }
+        let zone: CKRecordZone = try await CloudRequest.run { completion in
+            database.fetch(withRecordZoneID: recordID.zoneID) { @Sendable zone, error in
+                if let error { completion(.failure(error)) }
+                else if let zone { completion(.success(zone)) }
+                else { completion(.failure(SupperError.invalid("iCloud didn't return this library's sharing information."))) }
+            }
+        }
+        guard let shareID = zone.share?.recordID else {
+            if let lookupError { throw lookupError }
+            return nil
+        }
+        return try await CloudRequest.run { completion in
+            database.fetch(withRecordID: shareID) { @Sendable record, error in
+                completion(CloudProblem.shareResult(record, error: error))
+            }
+        }
+    }
     private func saveShareOnServer(_ share: CKShare, database: CKDatabase) async throws -> CKShare {
         try await CloudRequest.run { completion in
             let operation = CKModifyRecordsOperation(recordsToSave: [share], recordIDsToDelete: nil)
@@ -139,7 +176,7 @@ extension RecipeStore {
     func persistShare(_ share: CKShare, in store: NSPersistentStore) async throws {
         let container = persistence.container
         let context = container.newBackgroundContext()
-        let _: CKShare = try await CloudRequest.run { completion in
+        let _: CKShare = try await CloudRequest.untilFinished { completion in
             context.perform { @Sendable in container.persistUpdatedShare(share, in: store) { @Sendable saved, error in completion(CloudProblem.shareResult(saved, error: error)) } }
         }
         try refresh()
@@ -160,32 +197,43 @@ extension RecipeStore {
         }
         let incoming = persistentStore == persistence.sharedStore
         let container = persistence.container
-        // Never fall back to deleting shared managed objects: that would delete the owner's data.
-        let share = persistence.cloudEnabled ? try container.fetchShares(matching: [root.objectID])[root.objectID] : nil
-        if incoming && share == nil {
-            throw SupperError.invalid("The sharing information isn't available yet. Connect to iCloud and try leaving this library again.")
+        // An incoming zone can be purged even if its cached CKShare is missing.
+        // Never replace that with managed-object deletion, which syncs to the owner.
+        let recordZone = persistence.cloudEnabled ? container.recordID(for: root.objectID)?.zoneID : nil
+        let share: CKShare?
+        do { share = persistence.cloudEnabled ? try cachedShare(for: root.objectID, in: persistentStore) : nil }
+        catch {
+            guard incoming, recordZone != nil else {
+                recordCloudError(error, operation: "Reading library for removal")
+                throw error
+            }
+            share = nil
         }
-        if let share {
+        let zoneToPurge = incoming ? (share?.recordID.zoneID ?? recordZone) : share?.recordID.zoneID
+        var otherZones: [CKRecordZone.ID?] = []
+        if zoneToPurge != nil {
             let rootsRequest = NSFetchRequest<SupperLibraryMO>(entityName: "SupperLibrary")
             rootsRequest.affectedStores = [persistentStore]
             let otherIDs = try context.fetch(rootsRequest).filter { $0.objectID != root.objectID }.map(\.objectID)
-            let others = otherIDs.isEmpty ? [:] : try container.fetchShares(matching: otherIDs)
-            guard !others.values.contains(where: { $0.recordID.zoneID == share.recordID.zoneID }) else {
-                throw SupperError.invalid("This invitation contains more than one library. Manage its sharing before removing it.")
+            for otherID in otherIDs {
+                let zone = try container.recordID(for: otherID)?.zoneID
+                    ?? cachedShare(for: otherID, in: persistentStore)?.recordID.zoneID
+                otherZones.append(zone)
             }
         }
+        let removal = try HouseholdRemovalPlan(incoming: incoming, zoneID: zoneToPurge, otherZones: otherZones)
         // Finish any pending local saves before a purge invalidates managed objects.
         if context.hasChanges { try context.save() }
         let selectedID = activeHouseholdID
         removingHouseholdID = id
         defer { removingHouseholdID = nil }
         do {
-            if let share {
+            if case .purge(let zoneID) = removal {
                 // Core Data removes the zone and its local graph. In the shared store this
                 // ends only this participant's access. Do not report a timeout as cancellation:
                 // a destructive operation may still be running on Apple's server.
                 try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                    container.purgeObjectsAndRecordsInZone(with: share.recordID.zoneID, in: persistentStore) { @Sendable _, error in
+                    container.purgeObjectsAndRecordsInZone(with: zoneID, in: persistentStore) { @Sendable _, error in
                         if let error { continuation.resume(throwing: error) }
                         else { continuation.resume() }
                     }
@@ -197,15 +245,16 @@ extension RecipeStore {
                 do { try context.save() } catch { context.rollback(); throw error }
             }
             if selectedID == id { library = nil }
-            if UserDefaults.standard.string(forKey: "activeHousehold") == id.uuidString {
-                UserDefaults.standard.removeObject(forKey: "activeHousehold")
+            if preferences.string(forKey: "activeHousehold") == id.uuidString {
+                preferences.removeObject(forKey: "activeHousehold")
             }
             try ensureLibrary()
-            UserDefaults.standard.set(activeHouseholdID?.uuidString, forKey: "activeHousehold")
+            preferences.set(activeHouseholdID?.uuidString, forKey: "activeHousehold")
             try ensureMember()
             removingHouseholdID = nil
             try refresh()
         } catch {
+            recordCloudError(error, operation: incoming ? "Leaving library" : "Deleting library")
             removingHouseholdID = nil
             // Reconcile even if the server reports an error after changing the local store.
             try? ensureLibrary()
@@ -231,9 +280,9 @@ extension RecipeStore {
             }
             // Store the exact invitation identity. Arrival of any unrelated shared root cannot switch us.
             let recordID = metadata.share.recordID
-            UserDefaults.standard.set(recordID.recordName, forKey: "pendingShareRecord")
-            UserDefaults.standard.set(recordID.zoneID.zoneName, forKey: "pendingShareZone")
-            UserDefaults.standard.set(recordID.zoneID.ownerName, forKey: "pendingShareOwner")
+            preferences.set(recordID.recordName, forKey: "pendingShareRecord")
+            preferences.set(recordID.zoneID.zoneName, forKey: "pendingShareZone")
+            preferences.set(recordID.zoneID.ownerName, forKey: "pendingShareOwner")
             pendingInvitation = nil
             cloudMessage = "Invitation accepted. Your household is downloading; your existing library is kept."
             try refresh()
@@ -242,5 +291,37 @@ extension RecipeStore {
     func sharingStopped() {
         cloudMessage = "Sharing has stopped. Existing private libraries are kept. Choose your private library in Household settings if this household is no longer available."
         do { try refresh() } catch { errorMessage = error.localizedDescription }
+    }
+}
+
+enum HouseholdCloudLookup {
+    static func cachedShare(matching: () throws -> CKShare?, recordID: () -> CKRecord.ID?,
+                            shares: () throws -> [CKShare]) throws -> CKShare? {
+        var lookupError: Error?
+        do { if let share = try matching() { return share } }
+        catch { lookupError = error }
+        if let zoneID = recordID()?.zoneID,
+           let share = try shares().first(where: { $0.recordID.zoneID == zoneID }) { return share }
+        if let lookupError { throw lookupError }
+        return nil
+    }
+}
+
+enum HouseholdRemovalPlan {
+    case deleteObjects
+    case purge(CKRecordZone.ID)
+
+    init(incoming: Bool, zoneID: CKRecordZone.ID?, otherZones: [CKRecordZone.ID?]) throws {
+        if let zoneID {
+            guard otherZones.allSatisfy({ $0 != nil && $0 != zoneID }) else {
+                throw SupperError.invalid("Supper couldn't confirm that this invitation contains only this library. No libraries were removed.")
+            }
+            self = .purge(zoneID)
+        } else {
+            guard !incoming else {
+                throw SupperError.invalid("This library's iCloud identity isn't available. You can hide it on this iPhone using its library menu. The owner's recipes will be kept.")
+            }
+            self = .deleteObjects
+        }
     }
 }

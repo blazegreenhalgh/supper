@@ -23,6 +23,7 @@ final class RecipeStore: ObservableObject {
     @Published private(set) var collections: [RecipeCollection] = []
     @Published private(set) var members: [HouseholdMember] = []
     @Published private(set) var households: [HouseholdSummary] = []
+    @Published private(set) var hiddenLibraryCount = 0
     @Published private(set) var isReady = false
     @Published var errorMessage: String?
     @Published var cloudMessage: String?
@@ -42,13 +43,15 @@ final class RecipeStore: ObservableObject {
     private var observers: [NSObjectProtocol] = []
     private var loading = false
     let identity: MemberIdentity
+    let preferences: UserDefaults
     var activeHouseholdID: UUID? { library?.id }
     var activeHousehold: HouseholdSummary? { households.first { $0.id == activeHouseholdID } }
     var currentMemberName: String { members.first { $0.id == currentMemberID }?.name ?? identity.name }
 
-    init(persistence: PersistenceStack = PersistenceStack(), identity: MemberIdentity? = nil) {
+    init(persistence: PersistenceStack = PersistenceStack(), identity: MemberIdentity? = nil, preferences: UserDefaults = .standard) {
         let identity = identity ?? MemberIdentity()
         self.persistence = persistence; self.identity = identity; currentMemberID = identity.id
+        self.preferences = preferences
     }
     deinit { observers.forEach(NotificationCenter.default.removeObserver) }
 
@@ -240,8 +243,8 @@ final class RecipeStore: ObservableObject {
         let context = persistence.container.viewContext
         let request = NSFetchRequest<SupperLibraryMO>(entityName: "SupperLibrary")
         request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
-        let roots = try context.fetch(request)
-        let selected = UserDefaults.standard.string(forKey: "activeHousehold").flatMap(UUID.init(uuidString:))
+        let roots = try context.fetch(request).filter { !isHiddenLibrary($0) }
+        let selected = preferences.string(forKey: "activeHousehold").flatMap(UUID.init(uuidString:))
         if let selected, let root = roots.first(where: { $0.id == selected }) { library = root; return }
         if let root = roots.first(where: { $0.objectID.persistentStore == persistence.privateStore }) { library = root; return }
         if let root = roots.first { library = root; return }
@@ -255,8 +258,8 @@ final class RecipeStore: ObservableObject {
         let context = persistence.container.viewContext
         let request = NSFetchRequest<SupperLibraryMO>(entityName: "SupperLibrary")
         request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
-        guard let root = try context.fetch(request).first else { throw SupperError.invalid("This household is no longer available. Your other libraries are kept.") }
-        library = root; UserDefaults.standard.set(id.uuidString, forKey: "activeHousehold")
+        guard let root = try context.fetch(request).first, !isHiddenLibrary(root) else { throw SupperError.invalid("This household is no longer available. Your other libraries are kept.") }
+        library = root; preferences.set(id.uuidString, forKey: "activeHousehold")
         try ensureMember(); try refresh()
     }
     func ensureMember() throws {
@@ -268,7 +271,47 @@ final class RecipeStore: ObservableObject {
         if object.isInserted { assign(object, root: root, context: context); object.id = identity.id; object.name = identity.name; object.updatedAt = Date(); object.library = root }
         // Only this installation's provisional identity is resolved, never a legacy "me" record.
         if let account = identity.accountID, object.accountID == nil { object.accountID = account }
-        if context.hasChanges { try context.save() }
+        if context.hasChanges {
+            do { try context.save() } catch { context.rollback(); throw error }
+        }
+    }
+
+    private var hiddenLibraryIDs: Set<String> {
+        Set(preferences.stringArray(forKey: "hiddenIncomingLibraries") ?? [])
+    }
+    private func isHiddenLibrary(_ root: SupperLibraryMO) -> Bool {
+        root.objectID.persistentStore == persistence.sharedStore && root.id.map { hiddenLibraryIDs.contains($0.uuidString) } == true
+    }
+    /// A reversible local preference; never writes/deletes the participant's managed graph.
+    func hideIncomingLibrary(_ id: UUID) throws {
+        guard removingHouseholdID == nil, shareProgress == nil, !checkingCloudAccount, !joiningHousehold else {
+            throw SupperError.invalid("Wait for the current household action to finish.")
+        }
+        guard households.contains(where: { $0.id == id && $0.incoming }) else {
+            throw SupperError.invalid("Only a library shared with you can be hidden.")
+        }
+        var hidden = hiddenLibraryIDs; hidden.insert(id.uuidString)
+        preferences.set(Array(hidden), forKey: "hiddenIncomingLibraries")
+        if activeHouseholdID == id {
+            library = nil
+            preferences.removeObject(forKey: "activeHousehold")
+            try ensureLibrary()
+            preferences.set(activeHouseholdID?.uuidString, forKey: "activeHousehold")
+        }
+        try refresh()
+    }
+    func showHiddenLibraries() throws {
+        preferences.removeObject(forKey: "hiddenIncomingLibraries")
+        try refresh()
+    }
+
+    func recordCloudError(_ error: Error, operation: String) {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Development"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        let entry = "\(operation) · Supper \(version) (\(build))\n\(CloudProblem.diagnostics(error))"
+        // Preserve the original sync failure when a later sharing/account action fails.
+        let previous = cloudDiagnostics.map { "\n\nPrevious:\n" + String($0.prefix(12_000)) } ?? ""
+        cloudDiagnostics = entry + previous
     }
 
     func refresh() throws {
@@ -277,19 +320,26 @@ final class RecipeStore: ObservableObject {
         guard removingHouseholdID == nil else { return }
         let context = persistence.container.viewContext
         let request = NSFetchRequest<SupperLibraryMO>(entityName: "SupperLibrary")
-        let roots = try context.fetch(request)
-        households = roots.compactMap { root in root.id.map { HouseholdSummary(id: $0, name: root.name ?? "Supper", incoming: root.objectID.persistentStore == persistence.sharedStore) } }
-        if let pending = UserDefaults.standard.string(forKey: "pendingShareRecord") {
-            for root in roots where root.objectID.persistentStore == persistence.sharedStore {
-                if let share = try persistence.container.fetchShares(matching: [root.objectID])[root.objectID], share.recordID.recordName == pending,
-                   share.recordID.zoneID.zoneName == UserDefaults.standard.string(forKey: "pendingShareZone"),
-                   share.recordID.zoneID.ownerName == UserDefaults.standard.string(forKey: "pendingShareOwner") {
-                    library = root; UserDefaults.standard.set(root.id?.uuidString, forKey: "activeHousehold")
-                    UserDefaults.standard.removeObject(forKey: "pendingShareRecord"); joiningHousehold = false
+        let allRoots = try context.fetch(request)
+        if persistence.cloudEnabled, let sharedStore = persistence.sharedStore,
+           let pending = preferences.string(forKey: "pendingShareRecord") {
+            for root in allRoots where root.objectID.persistentStore == sharedStore {
+                // An incomplete invitation cache must not prevent the local cookbook refreshing.
+                if let share = try? cachedShare(for: root.objectID, in: sharedStore), share.recordID.recordName == pending,
+                   share.recordID.zoneID.zoneName == preferences.string(forKey: "pendingShareZone"),
+                   share.recordID.zoneID.ownerName == preferences.string(forKey: "pendingShareOwner") {
+                    var hidden = hiddenLibraryIDs
+                    if let id = root.id { hidden.remove(id.uuidString) }
+                    preferences.set(Array(hidden), forKey: "hiddenIncomingLibraries")
+                    library = root; preferences.set(root.id?.uuidString, forKey: "activeHousehold")
+                    preferences.removeObject(forKey: "pendingShareRecord"); joiningHousehold = false
                     try ensureMember()
                 }
             }
         }
+        let roots = allRoots.filter { !isHiddenLibrary($0) }
+        hiddenLibraryCount = allRoots.count - roots.count
+        households = roots.compactMap { root in root.id.map { HouseholdSummary(id: $0, name: root.name ?? "Supper", incoming: root.objectID.persistentStore == persistence.sharedStore) } }
         guard let root = library, roots.contains(where: { $0.objectID == root.objectID }) else {
             recipes = []; groceryItems = []; collections = []; members = []
             cloudMessage = "This household is no longer available. Choose another library in Household settings."
@@ -329,7 +379,7 @@ final class RecipeStore: ObservableObject {
             Task { @MainActor in
                 if let error = event.error {
                     self?.cloudMessage = CloudProblem.message(error)
-                    self?.cloudDiagnostics = CloudProblem.diagnostics(error)
+                    self?.recordCloudError(error, operation: "iCloud \(event.type)")
                 }
                 else if event.endDate != nil { do { try self?.refresh() } catch { self?.cloudMessage = error.localizedDescription } }
             }
