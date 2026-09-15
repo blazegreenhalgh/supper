@@ -518,6 +518,41 @@ import XCTest
         XCTAssertFalse(app.staticTexts["Chicken with rice edited"].exists)
     }
 
+    func testIngredientAndSectionDragsPersistOnSave() {
+        let app = launch(); openRecipe(app)
+        app.buttons["editRecipe"].tap(); app.buttons["editIngredients"].tap()
+        XCTAssertTrue(app.buttons["addRecipeSection"].waitForExistence(timeout: 5))
+        app.buttons["addRecipeSection"].tap()
+        let alert = app.alerts["New Section"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        alert.textFields.firstMatch.tap(); alert.textFields.firstMatch.typeText("Garnish")
+        alert.buttons["Save"].tap()
+        let plus = app.buttons["addIngredient-Garnish"]
+        XCTAssertTrue(plus.waitForExistence(timeout: 5))
+        let chicken = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "chicken breast")).firstMatch
+        XCTAssertTrue(chicken.isHittable)
+        let destination = plus.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .withOffset(CGVector(dx: -90, dy: 0))
+        chicken.press(forDuration: 1, thenDragTo: destination, withVelocity: .slow, thenHoldForDuration: 0.3)
+        let garnish = app.staticTexts["Garnish"].firstMatch
+        expectation(for: NSPredicate { _, _ in chicken.frame.minY > garnish.frame.maxY }, evaluatedWith: chicken)
+        waitForExpectations(timeout: 5)
+        capture(app, "Ingredient dragged into a new section")
+        let mainPlus = app.buttons["addIngredient"]
+        garnish.press(forDuration: 1, thenDragTo: mainPlus.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .withOffset(CGVector(dx: -90, dy: 0)), withVelocity: .slow, thenHoldForDuration: 0.3)
+        let spice = app.staticTexts["Spice mix"].firstMatch
+        expectation(for: NSPredicate { _, _ in garnish.frame.minY < spice.frame.minY }, evaluatedWith: garnish)
+        waitForExpectations(timeout: 5)
+        capture(app, "Section dragged with all its ingredients")
+        app.navigationBars.buttons.element(boundBy: 0).tap(); app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["editRecipe"].waitForExistence(timeout: 5))
+        app.buttons["editRecipe"].tap(); app.buttons["editIngredients"].tap()
+        XCTAssertTrue(app.staticTexts["Garnish"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertLessThan(garnish.frame.minY, chicken.frame.minY)
+        XCTAssertLessThan(chicken.frame.maxY, spice.frame.minY)
+    }
+
     func testFocusedIngredientEditorAndFullScreenMethod() {
         let app = launch(); openRecipe(app)
         app.buttons["editRecipe"].tap()

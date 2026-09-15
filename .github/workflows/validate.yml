@@ -32,6 +32,7 @@ jobs:
         # are available without waiting for the unrelated library/Keychain checks.
         run: |
           editor_tests=(
+            testIngredientAndSectionDragsPersistOnSave
             testChatCollectionChangesApplyToDraftAndOnlyPersistOnSave
             testRecipeCardPreviewActionsAndCollectionSubmenu
             testRecipeChatKeepsInputWhenReopenedAndCancelDoesNotSave

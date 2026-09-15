@@ -122,7 +122,7 @@ private let naanSource = RecipeAssistantSource(title: "Naan", url: URL(string: "
 
 @Test func recipePreviewDistinguishesDuplicateRowsAndPreservesRemovedContent() throws {
     let first = Ingredient(name: "Flour", quantity: "300", unit: "g", group: "Dough")
-    let second = Ingredient(name: "Flour", quantity: "1", unit: "tbsp", group: "To dust")
+    let second = Ingredient(name: "Flour", quantity: "1", unit: "tbsp", order: 1, group: "To dust")
     let removedStep = RecipeStep(text: "Dust the surface.", group: "Shaping")
     let base = RecipeDraft(title: "Naan", servings: 2, ingredients: [first, second], steps: [removedStep])
     let suggested = try RecipeAssistantPatch(servings: 4, ingredients: [
