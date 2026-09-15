@@ -12,6 +12,8 @@ struct HouseholdSettingsView: View {
     @State private var libraryToRemove: HouseholdSummary?
     @State private var showingRemovalConfirmation = false
     @State private var copiedDiagnostics = false
+    @State private var libraryToHide: HouseholdSummary?
+    @State private var showingHideConfirmation = false
     private var isBusy: Bool {
         store.shareProgress != nil || store.checkingCloudAccount || store.removingHouseholdID != nil || store.joiningHousehold
     }
@@ -77,6 +79,12 @@ struct HouseholdSettingsView: View {
                                     Button(household.incoming ? "Leave library" : "Delete library", systemImage: household.incoming ? "rectangle.portrait.and.arrow.right" : "trash", role: .destructive) {
                                         confirmRemoval(household)
                                     }
+                                    if household.incoming {
+                                        Button("Hide on this iPhone", systemImage: "eye.slash") {
+                                            libraryToHide = household
+                                            showingHideConfirmation = true
+                                        }
+                                    }
                                 } label: {
                                     Image(systemName: "ellipsis.circle").padding(.vertical, 8)
                                 }
@@ -91,6 +99,12 @@ struct HouseholdSettingsView: View {
                             }.disabled(isBusy)
                         }
                     }
+                    if store.hiddenLibraryCount > 0 {
+                        Button("Show hidden libraries (\(store.hiddenLibraryCount))", systemImage: "eye") {
+                            do { try store.showHiddenLibraries() }
+                            catch { self.error = CloudProblem.message(error) }
+                        }.disabled(isBusy)
+                    }
                 } header: { Text("Libraries") } footer: {
                     Text("Tap a library to switch. Use its menu or swipe left to delete a library you own or leave one shared with you.")
                 }
@@ -103,7 +117,18 @@ struct HouseholdSettingsView: View {
                 } message: { household in
                     Text(removalMessage(household))
                 }
+                .confirmationDialog("Hide this library on this iPhone?", isPresented: $showingHideConfirmation, titleVisibility: .visible, presenting: libraryToHide) { household in
+                    Button("Hide library") {
+                        do { try store.hideIncomingLibrary(household.id); name = store.currentMemberName }
+                        catch { self.error = CloudProblem.message(error) }
+                        libraryToHide = nil
+                    }
+                    Button("Cancel", role: .cancel) { libraryToHide = nil }
+                } message: { _ in
+                    Text("This hides the library only on this iPhone. It keeps the recipes and your sharing access. Use Show hidden libraries to bring it back.")
+                }
                 .onAppear { name = store.currentMemberName }
+                .onChange(of: store.cloudDiagnostics) { _, _ in copiedDiagnostics = false }
                 .onDisappear { task?.cancel() }
                 .sheet(item: $presentation) { NativeCloudSharingView(presentation: $0, store: store) { error = $0; presentation = nil } }
                 .supperError($error, title: "Couldn't update household")

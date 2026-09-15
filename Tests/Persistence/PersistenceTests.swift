@@ -9,7 +9,8 @@ import Testing
     func makeStore() async throws -> RecipeStore {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let store = RecipeStore(persistence: PersistenceStack(cloudEnabled: false, directory: directory))
+        let preferences = try #require(UserDefaults(suiteName: "SupperTests-" + UUID().uuidString))
+        let store = RecipeStore(persistence: PersistenceStack(cloudEnabled: false, directory: directory), preferences: preferences)
         await store.load()
         #expect(store.errorMessage == nil)
         #expect(store.isReady)
@@ -161,6 +162,97 @@ import Testing
         #expect(store.activeHouseholdID == shared)
         #expect(store.recipes.map(\.title) == ["Owner's recipe"])
         #expect(store.removingHouseholdID == nil)
+    }
+
+    @Test func missingInvitationCacheRecoversOnlyTheExactZoneAndOwner() throws {
+        let zone = CKRecordZone.ID(zoneName: "Household", ownerName: "owner-a")
+        let otherOwner = CKRecordZone.ID(zoneName: "Household", ownerName: "owner-b")
+        let share = CKShare(recordZoneID: zone), unrelated = CKShare(recordZoneID: otherOwner)
+        let record = CKRecord.ID(recordName: "library", zoneID: zone)
+        let recovered = try HouseholdCloudLookup.cachedShare(matching: { nil }, recordID: { record }, shares: { [unrelated, share] })
+        #expect(recovered?.recordID == share.recordID)
+        let wrongOwner = try HouseholdCloudLookup.cachedShare(matching: { nil }, recordID: { record }, shares: { [unrelated] })
+        #expect(wrongOwner == nil)
+        let noIdentity = try HouseholdCloudLookup.cachedShare(matching: { nil }, recordID: { nil }, shares: { [share] })
+        #expect(noIdentity == nil)
+    }
+
+    @Test func failedObjectLookupRecoversFromStoreCacheButDoesNotBecomeUnshared() throws {
+        let failure = NSError(domain: NSCocoaErrorDomain, code: 134060)
+        let zone = CKRecordZone.ID(zoneName: "Household", ownerName: "owner")
+        let record = CKRecord.ID(recordName: "library", zoneID: zone)
+        let share = CKShare(recordZoneID: zone)
+        let recovered = try HouseholdCloudLookup.cachedShare(matching: { throw failure }, recordID: { record }, shares: { [share] })
+        #expect(recovered?.recordID == share.recordID)
+        #expect(throws: (any Error).self) {
+            try HouseholdCloudLookup.cachedShare(matching: { throw failure }, recordID: { record }, shares: { [] })
+        }
+    }
+
+    @Test func leavingWithoutCachedShareUsesKnownZoneAndRejectsAmbiguousPurges() throws {
+        let zone = CKRecordZone.ID(zoneName: "Library", ownerName: "owner")
+        let other = CKRecordZone.ID(zoneName: "Other", ownerName: "owner")
+        let plan = try HouseholdRemovalPlan(incoming: true, zoneID: zone, otherZones: [other])
+        if case .purge(let target) = plan { #expect(target == zone) }
+        else { Issue.record("Incoming library must purge its zone, never delete managed objects") }
+        for zones in ([[zone], [nil]] as [[CKRecordZone.ID?]]) {
+            #expect(throws: (any Error).self) { try HouseholdRemovalPlan(incoming: true, zoneID: zone, otherZones: zones) }
+        }
+        #expect(throws: (any Error).self) { try HouseholdRemovalPlan(incoming: true, zoneID: nil, otherZones: []) }
+    }
+
+    @Test func hidingBrokenIncomingLibraryIsLocalReversibleAndKeepsOwnersGraph() async throws {
+        let store = try await makeStore(); let owned = try #require(store.activeHouseholdID)
+        let shared = try addLibrary(to: store, incoming: true)
+        try store.selectHousehold(shared)
+        try store.addRecipe(Recipe(title: "Owner's recipe", ingredients: [Ingredient(name: "onion")]))
+        try store.addGroceryItem(name: "Owner's groceries")
+        let context = store.persistence.container.viewContext
+        let before = try context.fetch(NSFetchRequest<RecipeMO>(entityName: "Recipe")).map(\.objectID)
+        try store.hideIncomingLibrary(shared)
+        #expect(store.activeHouseholdID == owned)
+        #expect(store.households.map(\.id) == [owned])
+        #expect(store.hiddenLibraryCount == 1)
+        #expect(!context.hasChanges)
+        #expect(try context.fetch(NSFetchRequest<RecipeMO>(entityName: "Recipe")).map(\.objectID) == before)
+        #expect(try context.count(for: NSFetchRequest<NSFetchRequestResult>(entityName: "GroceryItem")) == 1)
+        try store.ensureLibrary(); try store.refresh()
+        #expect(store.households.map(\.id) == [owned])
+        #expect(throws: (any Error).self) { try store.selectHousehold(shared) }
+        try store.showHiddenLibraries(); try store.selectHousehold(shared)
+        #expect(store.hiddenLibraryCount == 0)
+        #expect(store.recipes.map(\.title) == ["Owner's recipe"])
+        #expect(store.groceryItems.count == 1)
+        #expect(throws: (any Error).self) { try store.hideIncomingLibrary(owned) }
+    }
+
+    @Test func hiddenLibraryIsNotSelectedAfterVisibleLibraryDeletion() async throws {
+        let store = try await makeStore(); let owned = try #require(store.activeHouseholdID)
+        let shared = try addLibrary(to: store, incoming: true)
+        try store.hideIncomingLibrary(shared)
+        try await store.removeHousehold(owned)
+        #expect(store.households.count == 1)
+        #expect(store.activeHouseholdID != shared)
+        #expect(store.activeHouseholdID != owned)
+        #expect(store.hiddenLibraryCount == 1)
+    }
+
+    @Test func coreDataDiagnosticsExposeDebugReasonAndMultipleUnderlyingErrors() async throws {
+        let error = NSError(domain: NSCocoaErrorDomain, code: 134060,
+                            userInfo: [NSDebugDescriptionErrorKey: "The object already belongs to a share"])
+        #expect(CloudProblem.message(error).contains("134060"))
+        #expect(CloudProblem.message(error).contains("already belongs to a share"))
+        #expect(CloudProblem.diagnostics(error).contains("already belongs to a share"))
+        let nested = NSError(domain: CKErrorDomain, code: CKError.Code.networkUnavailable.rawValue)
+        let multiple = NSError(domain: NSCocoaErrorDomain, code: 134400,
+                               userInfo: ["NSMultipleUnderlyingErrors": [nested]])
+        #expect(CloudProblem.message(multiple).contains("internet connection"))
+        let store = try await makeStore()
+        store.recordCloudError(error, operation: "Preparing household")
+        store.recordCloudError(multiple, operation: "Reading invitation")
+        #expect(store.cloudDiagnostics?.contains("Preparing household") == true)
+        #expect(store.cloudDiagnostics?.contains("Reading invitation") == true)
+        #expect(store.cloudDiagnostics?.contains("134060") == true)
     }
 
     @Test func removalRejectsStaleIDsAndConcurrentActions() async throws {

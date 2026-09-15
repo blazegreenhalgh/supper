@@ -39,6 +39,12 @@ enum CloudProblem {
             $0.domain == CKErrorDomain && $0.code != CKError.Code.partialFailure.rawValue && $0.code != CKError.Code.batchRequestFailed.rawValue
         }) ?? errors.last ?? (error as NSError)
         guard detail.domain == CKErrorDomain, let code = CKError.Code(rawValue: detail.code) else {
+            if detail.domain == NSCocoaErrorDomain {
+                let reason = detail.localizedFailureReason
+                    ?? detail.userInfo[NSDebugDescriptionErrorKey] as? String
+                let description = reason ?? detail.localizedDescription
+                return "Supper couldn't complete this library action. \(description) (Core Data \(detail.code)). Copy iCloud diagnostics in Household settings if this continues."
+            }
             return detail.localizedDescription
         }
         let advice: String
@@ -75,6 +81,8 @@ enum CloudProblem {
             var lines = ["\(detail.domain) \(detail.code): \(detail.localizedDescription)"]
             if let reason = detail.localizedFailureReason { lines.append(reason) }
             if let recovery = detail.localizedRecoverySuggestion { lines.append(recovery) }
+            if let debug = detail.userInfo[NSDebugDescriptionErrorKey] as? String,
+               debug != detail.localizedFailureReason { lines.append(debug) }
             if detail.domain == CKErrorDomain && detail.code == CKError.Code.partialFailure.rawValue {
                 let partial = (detail as? CKError)?.partialErrorsByItemID
                 if partial?.isEmpty != false { lines.append("No per-record errors were supplied.") }
@@ -91,6 +99,9 @@ enum CloudProblem {
         }
         if let details = error.userInfo["NSDetailedErrors"] as? [NSError] {
             for detail in details { result += underlyingErrors(detail, depth: depth + 1) }
+        }
+        if let errors = error.userInfo["NSMultipleUnderlyingErrors"] as? [NSError] {
+            for detail in errors { result += underlyingErrors(detail, depth: depth + 1) }
         }
         if let partial = (error as? CKError)?.partialErrorsByItemID {
             for key in partial.keys.sorted(by: { String(describing: $0) < String(describing: $1) }) {
@@ -130,6 +141,19 @@ final class CloudRequestCompletion<Value>: @unchecked Sendable {
 }
 
 enum CloudRequest {
+    /// For Core Data mutations with no cancellation API. A UI timeout must not
+    /// unlock the action while the persistent container is still changing records.
+    @MainActor
+    static func untilFinished<Value>(
+        start: (@escaping @Sendable (Result<Value, Error>) -> Void) -> Void
+    ) async throws -> Value {
+        let completion = CloudRequestCompletion<Value>()
+        return try await withCheckedThrowingContinuation { continuation in
+            completion.install(continuation)
+            start { result in completion.finish(result) }
+        }
+    }
+
     @MainActor
     static func run<Value>(timeout: TimeInterval = 30,
                            start: (@escaping @Sendable (Result<Value, Error>) -> Void) -> Void) async throws -> Value {
