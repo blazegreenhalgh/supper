@@ -49,7 +49,10 @@ import XCTest
 
         expandRecipeChat(app)
         let input = chatInput(app)
-        input.tap(); input.typeText("F")
+        input.tap()
+        // Fresh simulators may show Apple's slide-to-type introduction.
+        if app.buttons["Continue"].exists { app.buttons["Continue"].tap() }
+        input.typeText("F")
         // A native TextField exposes the text bounds to accessibility, excluding
         // the pill's padding. Check its alignment and the native control's target
         // size, then capture the visible surfaces for comparison.
@@ -61,12 +64,14 @@ import XCTest
         input.typeText("ind ingredients and a method for naan bread")
         capture(app, "Native chat sheet with keyboard")
 
-        // Scrolling the conversation dismisses only the keyboard. The system
-        // grabber independently changes the sheet's detent and dismisses it.
+        // Dismiss the keyboard without closing the conversation, then exercise
+        // both native detents from a known large state. iOS may settle at medium
+        // when an interactive keyboard dismissal finishes.
         app.scrollViews["recipeChatMessages"].swipeDown()
         XCTAssertTrue(app.buttons["closeRecipeChat"].exists)
         if app.keyboards.firstMatch.exists { app.buttons["hideRecipeChatKeyboard"].tap() }
         XCTAssertFalse(app.keyboards.firstMatch.exists)
+        dragChatGrabber(app, to: 0.08)
         let largeHeight = app.scrollViews["recipeChatMessages"].frame.height
         dragChatGrabber(app, to: 0.52)
         XCTAssertTrue(app.buttons["closeRecipeChat"].exists)
