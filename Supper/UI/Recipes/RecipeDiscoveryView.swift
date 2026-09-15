@@ -162,9 +162,9 @@ struct RecipeDiscoveryView: View {
         GeometryReader { geometry in
             ScrollView {
                 VStack(spacing: 24) {
-                    DiscoveryHalo(searching: false).frame(width: 160, height: 130)
+                    DiscoveryKitchen(searching: false).frame(width: 180, height: 145)
                     Text("What are you\ncraving?")
-                        .font(.largeTitle.bold()).multilineTextAlignment(.center)
+                        .font(.system(.largeTitle, design: .serif, weight: .semibold)).multilineTextAlignment(.center)
                     VStack(spacing: 16) {
                         HStack(alignment: .center, spacing: 12) {
                             TextField("A dish or a mood…", text: $model.prompt, axis: .vertical)
@@ -173,7 +173,7 @@ struct RecipeDiscoveryView: View {
                                 .accessibilityLabel("What are you craving?")
                             Button { promptFocused = false; model.search(in: store) } label: {
                                 Image(systemName: "arrow.up").font(.headline).frame(minWidth: 24, minHeight: 28)
-                            }.supperGlassButton(prominent: true).controlSize(.large)
+                            }.buttonStyle(.borderedProminent).tint(KitchenPalette.clay).buttonBorderShape(.circle).controlSize(.regular)
                                 .accessibilityLabel("Find recipes").accessibilityIdentifier("findDiscoveryRecipes")
                                 .disabled(model.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.prompt.count > 600 || !canSearch)
                         }
@@ -181,7 +181,7 @@ struct RecipeDiscoveryView: View {
                         .supperGlassPanel()
                         .overlay {
                             RoundedRectangle(cornerRadius: 28)
-                                .strokeBorder(LinearGradient(colors: [.purple.opacity(0.25), .pink.opacity(0.35), .mint.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
+                                .strokeBorder(KitchenPalette.honey.opacity(0.25), lineWidth: 1)
                                 .allowsHitTesting(false)
                         }
                         if model.prompt.count > 600 { Text("600 characters max.").font(.caption).foregroundStyle(.red) }
@@ -192,8 +192,6 @@ struct RecipeDiscoveryView: View {
                     }
                     if !canSearch {
                         NavigationLink("Set up OpenAI", destination: AISettingsView()).font(.subheadline)
-                    } else {
-                        Text("Real recipes. A little inspiration.").font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 .padding(.horizontal, 24).padding(.vertical, 28)
@@ -212,9 +210,9 @@ struct RecipeDiscoveryView: View {
 
     private var loading: some View {
         VStack(spacing: 24) {
-            DiscoveryHalo(searching: true).frame(width: 240, height: 210)
-            Text("Finding your\nnext favourite.").font(.largeTitle.bold()).multilineTextAlignment(.center)
-            ProgressView(loadingLabel).font(.subheadline).foregroundStyle(.secondary)
+            DiscoveryKitchen(searching: true).frame(width: 280, height: 245)
+            Text("Finding something\ngood.").font(.system(.largeTitle, design: .serif, weight: .semibold)).multilineTextAlignment(.center)
+            Text(loadingLabel).font(.subheadline).foregroundStyle(.secondary)
                 .accessibilityIdentifier("discoveryProgress").accessibilityValue(model.progress)
             Button("Cancel") { model.cancel() }.supperGlassButton().accessibilityIdentifier("cancelDiscoverySearch")
         }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -288,33 +286,24 @@ struct RecipeDiscoveryView: View {
     }
 }
 
-/// Quiet colour and motion around the native controls. Canvas keeps the animation
-/// out of layout and accessibility; it pauses offscreen and respects Reduce Motion.
-private struct DiscoveryAtmosphere: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.colorScheme) private var colorScheme
+/// Warm window light and a little stovetop scene, separate from controls and layout.
+private enum KitchenPalette {
+    static let clay = Color(red: 0.68, green: 0.32, blue: 0.21)
+    static let honey = Color(red: 0.85, green: 0.62, blue: 0.30)
+    static let olive = Color(red: 0.40, green: 0.47, blue: 0.28)
+    static let wood = Color(red: 0.49, green: 0.32, blue: 0.19)
+}
 
+private struct DiscoveryAtmosphere: View {
+    @Environment(\.colorScheme) private var colorScheme
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || scenePhase != .active)) { timeline in
-            Canvas { context, size in
-                let time = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate / 9
-                let colours: [Color] = [.pink, .purple, .mint]
-                for index in 0..<3 {
-                    let phase = time + Double(index) * 2.1
-                    let centre = CGPoint(x: size.width * (0.5 + 0.26 * sin(phase)),
-                                         y: size.height * (0.47 + 0.16 * cos(phase * 0.8)))
-                    let radius = min(size.width, size.height) * 0.72
-                    let circle = Path(ellipseIn: CGRect(x: centre.x - radius, y: centre.y - radius, width: radius * 2, height: radius * 2))
-                    context.fill(circle, with: .radialGradient(Gradient(colors: [colours[index].opacity(colorScheme == .dark ? 0.18 : 0.14), .clear]),
-                                                              center: centre, startRadius: 0, endRadius: radius))
-                }
-            }
-        }.ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true)
+        RadialGradient(colors: [KitchenPalette.honey.opacity(colorScheme == .dark ? 0.12 : 0.13), .clear],
+                       center: .init(x: 0.8, y: 0.3), startRadius: 10, endRadius: 440)
+            .ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true)
     }
 }
 
-private struct DiscoveryHalo: View {
+private struct DiscoveryKitchen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     let searching: Bool
@@ -322,37 +311,72 @@ private struct DiscoveryHalo: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || scenePhase != .active)) { timeline in
             Canvas { context, size in
-                let time = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate / (searching ? 3 : 6)
-                let centre = CGPoint(x: size.width / 2, y: size.height / 2)
-                let radius = min(size.width, size.height) * 0.32
-                let colours: [Color] = [.mint, .purple, .pink]
+                let t = reduceMotion ? 0.8 : timeline.date.timeIntervalSinceReferenceDate
+                // Work in a small, fixed drawing space so every element scales together.
+                let scale = min(size.width / 240, size.height / 210)
+                context.translateBy(x: (size.width - 240 * scale) / 2, y: (size.height - 210 * scale) / 2)
+                context.scaleBy(x: scale, y: scale)
+
+                context.fill(Path(ellipseIn: CGRect(x: 45, y: 176, width: 150, height: 13)),
+                             with: .color(KitchenPalette.wood.opacity(0.09)))
+                // Steam rises, curls and fades without a jump at the loop boundary.
                 for index in 0..<3 {
-                    let phase = time + Double(index) * .pi * 2 / 3
-                    let glow = CGPoint(x: centre.x + cos(phase) * radius * 0.35, y: centre.y + sin(phase) * radius * 0.35)
-                    let spread = radius * (1.5 + 0.1 * sin(time))
-                    context.fill(Path(ellipseIn: CGRect(x: glow.x - spread, y: glow.y - spread, width: spread * 2, height: spread * 2)),
-                                 with: .radialGradient(Gradient(colors: [colours[index].opacity(0.3), .clear]), center: glow, startRadius: 0, endRadius: spread))
+                    let phase = (t / (searching ? 2.8 : 4.5) + Double(index) / 3).truncatingRemainder(dividingBy: 1)
+                    let x = 91.0 + Double(index) * 27
+                    let y = 96 - phase * 66
+                    var steam = Path()
+                    steam.move(to: CGPoint(x: x, y: y + 18))
+                    steam.addCurve(to: CGPoint(x: x + 5 * sin(phase * .pi * 2), y: y - 12),
+                                   control1: CGPoint(x: x - 12, y: y + 6), control2: CGPoint(x: x + 13, y: y))
+                    context.stroke(steam, with: .color(KitchenPalette.wood.opacity(sin(phase * .pi) * 0.36)),
+                                   style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 }
-                context.stroke(Path(ellipseIn: CGRect(x: centre.x - radius, y: centre.y - radius, width: radius * 2, height: radius * 2)),
-                               with: .linearGradient(Gradient(colors: [.mint.opacity(0.6), .pink.opacity(0.1), .purple.opacity(0.5)]),
-                                                     startPoint: .zero, endPoint: CGPoint(x: size.width, y: size.height)), lineWidth: 1)
-                for index in 0..<8 {
-                    let phase = time + Double(index) * .pi / 4
-                    let orbit = radius * (index.isMultiple(of: 2) ? 1.1 : 1.4)
-                    let point = CGPoint(x: centre.x + cos(phase) * orbit, y: centre.y + sin(phase) * orbit * 0.85)
-                    let diameter = index.isMultiple(of: 3) ? 5.0 : 3.0
-                    context.fill(Path(ellipseIn: CGRect(x: point.x - diameter / 2, y: point.y - diameter / 2, width: diameter, height: diameter)),
-                                 with: .color(colours[index % 3].opacity(0.7)))
+
+                // Enamel casserole, handles and a rounded base.
+                for x in [43.0, 174.0] {
+                    context.stroke(Path(roundedRect: CGRect(x: x, y: 119, width: 23, height: 18), cornerRadius: 8),
+                                   with: .color(KitchenPalette.clay), lineWidth: 6)
                 }
+                var pot = Path()
+                pot.move(to: CGPoint(x: 60, y: 112))
+                pot.addLine(to: CGPoint(x: 66, y: 153))
+                pot.addQuadCurve(to: CGPoint(x: 90, y: 175), control: CGPoint(x: 69, y: 175))
+                pot.addLine(to: CGPoint(x: 150, y: 175))
+                pot.addQuadCurve(to: CGPoint(x: 174, y: 153), control: CGPoint(x: 171, y: 175))
+                pot.addLine(to: CGPoint(x: 180, y: 112))
+                pot.closeSubpath()
+                context.fill(pot, with: .linearGradient(Gradient(colors: [KitchenPalette.clay.opacity(0.78), KitchenPalette.clay]),
+                                                       startPoint: CGPoint(x: 65, y: 110), endPoint: CGPoint(x: 175, y: 175)))
+                context.fill(Path(ellipseIn: CGRect(x: 59, y: 99, width: 122, height: 32)), with: .color(KitchenPalette.clay))
+                context.fill(Path(ellipseIn: CGRect(x: 65, y: 103, width: 110, height: 23)), with: .color(KitchenPalette.honey))
+                context.stroke(Path(ellipseIn: CGRect(x: 59, y: 99, width: 122, height: 32)),
+                               with: .color(KitchenPalette.clay.opacity(0.9)), lineWidth: 3)
+
+                // Tiny bubbles and herbs follow the surface of the soup.
+                for index in 0..<5 {
+                    let phase = (t / 1.8 + Double(index) * 0.21).truncatingRemainder(dividingBy: 1)
+                    let x = 83.0 + Double(index) * 18
+                    let y = 111.0 + sin(Double(index) * 2) * 4
+                    let radius = searching ? 1 + phase * 3 : 2
+                    context.stroke(Path(ellipseIn: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 1.2)),
+                                   with: .color(.white.opacity(searching ? (1 - phase) * 0.65 : 0.3)), lineWidth: 1)
+                    context.fill(Path(ellipseIn: CGRect(x: x + 3, y: y + 5, width: 5, height: 2)),
+                                 with: .color(KitchenPalette.olive))
+                }
+                // The spoon traces an ellipse, visibly stirring rather than spinning.
+                let stirring = searching ? t * 2.2 : 0.5
+                let tip = CGPoint(x: 126 + sin(stirring) * 21, y: 114 + cos(stirring) * 4)
+                let handle = CGPoint(x: 154 + sin(stirring) * 9, y: 62 + cos(stirring) * 3)
+                var spoon = Path()
+                spoon.move(to: handle); spoon.addLine(to: tip)
+                context.stroke(spoon, with: .color(KitchenPalette.wood), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                context.fill(Path(ellipseIn: CGRect(x: tip.x - 6, y: tip.y - 4, width: 12, height: 8)),
+                             with: .color(KitchenPalette.wood))
+                var shine = Path()
+                shine.move(to: CGPoint(x: 76, y: 139)); shine.addQuadCurve(to: CGPoint(x: 90, y: 163), control: CGPoint(x: 77, y: 160))
+                context.stroke(shine, with: .color(.white.opacity(0.24)), style: StrokeStyle(lineWidth: 3, lineCap: .round))
             }
-        }
-        .overlay {
-            Image(systemName: searching ? "sparkle.magnifyingglass" : "sparkles")
-                .font(.system(size: searching ? 42 : 32, weight: .light))
-                .foregroundStyle(.primary)
-                .symbolEffect(.breathe, options: .repeating, isActive: searching && !reduceMotion && scenePhase == .active)
-        }
-        .allowsHitTesting(false).accessibilityHidden(true)
+        }.allowsHitTesting(false).accessibilityHidden(true)
     }
 }
 

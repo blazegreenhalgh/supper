@@ -76,6 +76,29 @@ import Testing
         try store.deleteCollection(a.id)
         #expect(store.recipes.count == 1); #expect(store.recipes[0].collectionIDs == [b.id])
     }
+    @Test func chatCollectionsAndCollectionDropsPersistWithoutReplacingContent() async throws {
+        let store = try await makeStore()
+        let a = RecipeCollection(name: "A"), b = RecipeCollection(name: "B"), c = RecipeCollection(name: "C")
+        try store.saveCollection(a); try store.saveCollection(b); try store.saveCollection(c)
+        let recipe = Recipe(title: "Soup", ingredients: [Ingredient(name: "Carrot")], collectionIDs: [a.id, c.id])
+        try store.addRecipe(recipe)
+        let household = try #require(store.activeHouseholdID)
+        let draft = RecipeDraft(recipe: recipe)
+        let proposal = RecipeCollectionProposal(base: draft.collectionIDs, edit: .init(add: [b.id], remove: []), householdID: household)
+        let edited = try proposal.applying(to: draft, collections: store.collections, householdID: household)
+        #expect(store.recipes[0].collectionIDs == [a.id, c.id]) // Draft stays local until Save.
+        try store.updateRecipe(edited.applying(to: recipe))
+        try store.refresh()
+        #expect(store.recipes[0].collectionIDs == [a.id, b.id, c.id])
+        let drag = RecipeDragItem(recipeID: recipe.id, householdID: household, sourceCollectionID: a.id)
+        try store.moveRecipe(drag, to: b.id)
+        try store.refresh()
+        #expect(store.recipes[0].collectionIDs == [b.id, c.id])
+        #expect(store.recipes[0].ingredients == recipe.ingredients)
+        #expect(throws: (any Error).self) { try store.moveRecipe(drag, to: b.id) }
+        #expect(throws: (any Error).self) { try store.setMemberships([UUID()], recipeID: recipe.id) }
+        #expect(store.recipes[0].collectionIDs == [b.id, c.id])
+    }
     @Test func reactionsNeverOverwriteAnotherMember() async throws {
         let store = try await makeStore(); let recipe = Recipe(title: "Soup"); try store.addRecipe(recipe)
         let context = store.persistence.container.viewContext

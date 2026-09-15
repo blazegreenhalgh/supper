@@ -14,6 +14,7 @@ struct RecipeChatMessage: Identifiable {
     @Published var input = ""
     @Published private(set) var messages: [RecipeChatMessage] = []
     @Published private(set) var pending: RecipeAssistantProposal?
+    @Published private(set) var pendingCollections: RecipeCollectionProposal?
     @Published private(set) var photos: [RecipePhotoProposal] = []
     @Published private(set) var choosingPhoto = false
     @Published private(set) var needsPhotoUpload = false
@@ -36,7 +37,7 @@ struct RecipeChatMessage: Identifiable {
         return nil
     }
 
-    func send(draft: RecipeDraft, action explicitAction: RecipeChatAction? = nil) {
+    func send(draft: RecipeDraft, collections: [RecipeCollection], householdID: UUID?, action explicitAction: RecipeChatAction? = nil) {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !busy, !text.isEmpty, text.count <= 1200 else { return }
         // A stale suggestion stays available for review, but never becomes the
@@ -58,6 +59,16 @@ struct RecipeChatMessage: Identifiable {
                 try Task.checkCancellation()
                 guard requestID == id else { return }
                 choosingPhoto = false; needsPhotoUpload = false
+                if action == .collections {
+                    progress = "Checking your collections…"
+                    let edit = try await RecipeEditorAssistant().collections(for: text, draft: draft, available: collections, conversation: history)
+                    try Task.checkCancellation()
+                    guard requestID == id else { return }
+                    let selected = try edit.applying(to: draft.collectionIDs, available: Set(collections.map(\.id)))
+                    pendingCollections = selected == draft.collectionIDs ? nil : RecipeCollectionProposal(base: draft.collectionIDs, edit: edit, householdID: householdID)
+                    messages.append(RecipeChatMessage(text: pendingCollections != nil ? "Review the collection changes below, then apply them to your draft." : "No collection changes made." + (edit.question.isEmpty ? " The recipe already has that selection." : " " + edit.question)))
+                    return
+                }
                 if action == .choosePhoto {
                     choosingPhoto = true
                     messages.append(RecipeChatMessage(text: "Would you like a photo from online, a generated cover, or an editorial edit of your own food photo?"))
@@ -115,6 +126,26 @@ struct RecipeChatMessage: Identifiable {
 
     func discardPhotos() { guard !busy else { return }; photos = [] }
 
+    func collectionBlocker(draft: RecipeDraft, collections: [RecipeCollection], householdID: UUID?) -> String? {
+        if busy { return "Wait for the current request to finish." }
+        guard let pendingCollections else { return "Ask again to prepare collection changes." }
+        do { _ = try pendingCollections.applying(to: draft, collections: collections, householdID: householdID); return nil }
+        catch { return error.localizedDescription }
+    }
+
+    func applyCollections(to draft: inout RecipeDraft, collections: [RecipeCollection], householdID: UUID?) {
+        guard !busy, let proposal = pendingCollections else { return }
+        do {
+            let changed = try proposal.applying(to: draft, collections: collections, householdID: householdID)
+            undoStack.append(RecipeAssistantUndo(before: draft, after: changed))
+            draft = changed; pendingCollections = nil; error = nil; retryRequest = nil
+            let names = collections.filter { changed.collectionIDs.contains($0.id) }.map(\.name).joined(separator: ", ")
+            messages.append(RecipeChatMessage(text: "Collections updated on your draft: \(names.isEmpty ? "none" : names). Tap Save to keep this selection."))
+        } catch { self.error = error.localizedDescription }
+    }
+
+    func discardCollections() { guard !busy else { return }; pendingCollections = nil }
+
     func stop() {
         guard busy else { return }
         task?.cancel(); task = nil; requestID = nil; busy = false
@@ -141,15 +172,21 @@ struct RecipeChatMessage: Identifiable {
     func undo(in draft: inout RecipeDraft) {
         guard !busy, editingField == nil, let last = undoStack.last else { return }
         do {
-            draft = try last.restoring(draft); undoStack.removeLast(); pending = nil; photos = []; error = nil
+            draft = try last.restoring(draft); undoStack.removeLast(); pending = nil; pendingCollections = nil; photos = []; error = nil
             messages.append(RecipeChatMessage(text: "Undid the last AI edit."))
         } catch { self.error = error.localizedDescription }
     }
 
     #if DEBUG
     /// Deterministic UI coverage without a key, network request or production fallback.
-    func loadUITestProposal(draft: RecipeDraft) {
+    func loadUITestProposal(draft: RecipeDraft, collections: [RecipeCollection], householdID: UUID?) {
         let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("--ui-testing"), arguments.contains("--collection-chat-ui-testing"), messages.isEmpty,
+           let collection = collections.first(where: { !draft.collectionIDs.contains($0.id) }) {
+            pendingCollections = RecipeCollectionProposal(base: draft.collectionIDs, edit: RecipeCollectionEdit(add: [collection.id], remove: []), householdID: householdID)
+            messages.append(RecipeChatMessage(text: "Review the collection changes below, then apply them to your draft."))
+            return
+        }
         if arguments.contains("--ui-testing"), arguments.contains("--recipe-photo-ui-testing"), messages.isEmpty,
            let image = UIImage(systemName: "fork.knife.circle.fill")?.pngData() {
             photos = RecipePhotoKind.allCases.map { kind in
@@ -177,6 +214,7 @@ struct RecipeChatMessage: Identifiable {
 }
 
 struct RecipeEditorChatView: View {
+    @EnvironmentObject private var store: RecipeStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var draft: RecipeDraft
     @ObservedObject var session: RecipeChatSession
@@ -190,9 +228,9 @@ struct RecipeEditorChatView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
             if expanded {
-            Divider()
+            grabber
+            reviewActions.frame(maxWidth: .infinity, alignment: .trailing).padding(.horizontal, 16)
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 22) {
@@ -213,6 +251,7 @@ struct RecipeEditorChatView: View {
                             }.accessibilityIdentifier("recipeChatError")
                         }
                         if let proposal = session.pending { proposalCard(proposal) }
+                        if let proposal = session.pendingCollections { collectionCard(proposal) }
                         if session.choosingPhoto || session.needsPhotoUpload { photoChoices }
                         if !session.photos.isEmpty { photoCards }
                         Color.clear.frame(height: 1).id("chatBottom")
@@ -224,10 +263,14 @@ struct RecipeEditorChatView: View {
                 .onChange(of: session.busy) { _, _ in proxy.scrollTo("chatBottom", anchor: .bottom) }
                 .onAppear { proxy.scrollTo("chatBottom", anchor: .bottom) }
             }
-            composer
             }
+            composer
         }
         .supperGlassPanel()
+        .onChange(of: inputFocused) { _, focused in
+            if focused && !expanded { withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) { expanded = true } }
+        }
+        .onChange(of: expanded) { _, value in if !value { inputFocused = false } }
         .sheet(isPresented: $showingAISettings) {
             NavigationStack { AISettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingAISettings = false } } } }
         }
@@ -244,26 +287,24 @@ struct RecipeEditorChatView: View {
         .sheet(isPresented: $showingPhotoTools) { RecipeCoverView(draft: $draft, initialMode: .enhanced, initialRequest: session.photoPreferences) }
     }
 
-    private var header: some View {
+    private var grabber: some View {
+        Button(action: collapse) {
+            Capsule().fill(.secondary.opacity(0.4)).frame(width: 36, height: 5)
+                .frame(maxWidth: .infinity).frame(height: 28).contentShape(.rect)
+        }.buttonStyle(.plain).accessibilityLabel("Collapse chat")
+            .accessibilityIdentifier("toggleRecipeChat")
+            .simultaneousGesture(DragGesture(minimumDistance: 8).onEnded { value in
+                if value.translation.height > 20 || value.predictedEndTranslation.height > 60 { collapse() }
+            })
+    }
+
+    private func collapse() {
+        inputFocused = false
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) { expanded = false }
+    }
+
+    private var reviewActions: some View {
         HStack(spacing: 8) {
-            Button {
-                inputFocused = false
-                withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) { expanded.toggle() }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "sparkles")
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Ask AI").font(.subheadline.weight(.semibold))
-                        if session.busy { Text("Working…").font(.caption2).foregroundStyle(.secondary) }
-                        else if !session.photos.isEmpty { Text("Photo ready").font(.caption2).foregroundStyle(.secondary) }
-                        else if let pending = session.pending { Text("\(pending.changes.count) suggested changes").font(.caption2).foregroundStyle(.secondary) }
-                    }
-                    Spacer(minLength: 8)
-                    Image(systemName: expanded ? "chevron.down" : "chevron.up").font(.caption)
-                }.frame(maxWidth: .infinity, minHeight: 44).contentShape(.rect)
-            }.buttonStyle(.plain)
-                .accessibilityLabel(expanded ? "Minimise Ask AI" : "Expand Ask AI")
-                .accessibilityIdentifier("toggleRecipeChat")
             if let photo = session.photos.first {
                 Button("Preview") { inputFocused = false; reviewingPhoto = photo }
                     .supperGlassButton().accessibilityIdentifier("reviewChatPhoto")
@@ -275,7 +316,7 @@ struct RecipeEditorChatView: View {
                     .supperGlassButton().disabled(session.editingField != nil)
                     .accessibilityLabel("Undo last AI edit").accessibilityIdentifier("undoRecipeAIEdit")
             }
-        }.padding(.horizontal, 16).padding(.vertical, 7)
+        }
     }
 
     private var introduction: some View {
@@ -348,30 +389,57 @@ struct RecipeEditorChatView: View {
         VStack(spacing: 8) {
             if session.input.count > 1200 { Text("Keep your request under 1,200 characters.").font(.caption).foregroundStyle(.secondary) }
             HStack(alignment: .bottom, spacing: 10) {
+                if expanded {
                 Menu("Photo options", systemImage: "photo.badge.plus") {
                     Button("Find a photo online") { photoRequest(.findPhoto) }
                     Button("Generate a cover") { photoRequest(.generatePhoto) }
                     Button("Polish my food photo") { inputFocused = false; showingPhotoTools = true }
                 }.labelStyle(.iconOnly).tint(.primary).frame(width: 36, height: 44)
                     .disabled(session.busy).accessibilityIdentifier("chatPhotoOptions")
+                }
                 TextField(session.pending?.base == draft ? "Refine this suggestion…" : "Ask about this recipe…", text: $session.input, axis: .vertical)
-                    .lineLimit(1...3).padding(.horizontal, 16).padding(.vertical, 10)
-                    .background(Color.primary.opacity(0.05), in: .capsule).focused($inputFocused)
+                    .lineLimit(1...3).padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 44)
+                    .background(expanded ? Color.primary.opacity(0.05) : .clear, in: .capsule).focused($inputFocused)
                     .accessibilityIdentifier("recipeChatInput")
+                    .accessibilityLabel("Ask about this recipe")
+                    .accessibilityHint(expanded ? "" : "Opens recipe chat")
+                if expanded {
                 if session.busy {
                     Button("Stop", systemImage: "stop.fill") { session.stop() }
-                        .labelStyle(.iconOnly).supperGlassButton().controlSize(.large)
+                        .labelStyle(.iconOnly).supperGlassButton().controlSize(.regular).buttonBorderShape(.circle).frame(width: 44, height: 44)
                 } else {
                     Button("Send", systemImage: "arrow.up") { send() }
-                        .labelStyle(.iconOnly).supperGlassButton(prominent: true).controlSize(.large)
+                        .labelStyle(.iconOnly).supperGlassButton(prominent: true).controlSize(.regular).buttonBorderShape(.circle).frame(width: 44, height: 44)
                         .disabled(!aiSettings.isConfigured || session.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.input.count > 1200)
                         .accessibilityIdentifier("sendRecipeChat")
                 }
+                }
             }
-        }.padding(.horizontal, 16).padding(.vertical, 10)
+        }.padding(.horizontal, expanded ? 12 : 4).padding(.vertical, 6)
     }
 
-    private func send() { inputFocused = false; session.send(draft: draft) }
+    private func send() { inputFocused = false; session.send(draft: draft, collections: store.collections, householdID: store.activeHouseholdID) }
+
+    private func collectionCard(_ proposal: RecipeCollectionProposal) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Collection changes", systemImage: "folder").font(.headline)
+            ForEach(store.collections.filter { proposal.edit.add.contains($0.id) && !proposal.base.contains($0.id) }) { collection in
+                Label(collection.name, systemImage: "plus.circle").accessibilityLabel("Add to \(collection.name)")
+            }
+            ForEach(store.collections.filter { proposal.edit.remove.contains($0.id) && proposal.base.contains($0.id) }) { collection in
+                Label(collection.name, systemImage: "minus.circle").strikethrough().accessibilityLabel("Remove from \(collection.name)")
+            }
+            if let blocker = session.collectionBlocker(draft: draft, collections: store.collections, householdID: store.activeHouseholdID) {
+                Text(blocker).font(.caption).foregroundStyle(.secondary)
+            }
+            Button("Apply to draft") {
+                session.applyCollections(to: &draft, collections: store.collections, householdID: store.activeHouseholdID)
+            }.supperGlassButton(prominent: true).accessibilityIdentifier("applyChatCollections")
+                .disabled(session.collectionBlocker(draft: draft, collections: store.collections, householdID: store.activeHouseholdID) != nil)
+            Button("Discard", role: .destructive) { session.discardCollections() }.disabled(session.busy)
+        }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.primary.opacity(0.04), in: .rect(cornerRadius: 20))
+    }
 
     private var photoChoices: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -407,6 +475,6 @@ struct RecipeEditorChatView: View {
         guard aiSettings.isConfigured else { showingAISettings = true; return }
         let preferences = session.photoPreferences
         session.input = preferences.isEmpty ? (action == .findPhoto ? "Find a photo online for this recipe" : "Generate an editorial cover for this recipe") : preferences
-        inputFocused = false; session.send(draft: draft, action: action)
+        inputFocused = false; session.send(draft: draft, collections: store.collections, householdID: store.activeHouseholdID, action: action)
     }
 }

@@ -70,6 +70,15 @@ final class RecipeStore: ObservableObject {
                 try addRecipe(Recipe(title: "Chicken with rice", durationMinutes: 25, servings: 4, tags: ["Easy"],
                     ingredients: [Ingredient(name: "chicken breast", quantity: "500", unit: "g"), Ingredient(name: "cumin", quantity: "1", unit: "tsp", group: "Spice mix"), Ingredient(name: "onion, finely diced (brown, white or yellow)", quantity: "1")],
                     steps: [RecipeStep(text: "Cook the chicken breast."), RecipeStep(text: "Serve with rice.", order: 1)]))
+                let arguments = ProcessInfo.processInfo.arguments
+                if arguments.contains("--collection-chat-ui-testing") || arguments.contains("--collection-library-ui-testing") {
+                    let weeknight = RecipeCollection(name: "Weeknight", isOnHome: true, order: 0)
+                    let weekend = RecipeCollection(name: "Weekend", isOnHome: true, order: 1)
+                    try saveCollection(weeknight); try saveCollection(weekend)
+                    if arguments.contains("--collection-library-ui-testing"), let recipe = recipes.first {
+                        try setMemberships([weeknight.id], recipeID: recipe.id)
+                    }
+                }
             }
             #endif
             if let first = queuedInvitations.first { pendingInvitation = first; queuedInvitations.removeAll() }
@@ -233,10 +242,17 @@ final class RecipeStore: ObservableObject {
         }
     }
     func setMemberships(_ ids: Set<UUID>, recipeID: UUID) throws {
+        guard ids.isSubset(of: Set(collections.map(\.id))) else { throw SupperError.invalid("A collection is no longer available.") }
         try mutate { context, _ in
             guard let recipe = try fetchRecipeObject(recipeID, context: context) else { throw SupperError.invalid("Recipe no longer available.") }
             recipe.collectionIDsJSON = Self.encodeUUIDs(Array(ids))
         }
+    }
+
+    func moveRecipe(_ item: RecipeDragItem, to collectionID: UUID) throws {
+        guard let recipe = recipes.first(where: { $0.id == item.recipeID }) else { throw SupperError.invalid("Recipe no longer available.") }
+        let ids = try item.memberships(for: recipe, destination: collectionID, householdID: activeHouseholdID, available: Set(collections.map(\.id)))
+        try setMemberships(ids, recipeID: recipe.id)
     }
 
     func ensureLibrary() throws {

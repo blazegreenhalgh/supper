@@ -1,5 +1,24 @@
 import Foundation
 
+public struct RecipeDragItem: Codable, Sendable {
+    public let recipeID: UUID
+    public let householdID: UUID
+    public let sourceCollectionID: UUID?
+    public init(recipeID: UUID, householdID: UUID, sourceCollectionID: UUID?) {
+        self.recipeID = recipeID; self.householdID = householdID; self.sourceCollectionID = sourceCollectionID
+    }
+    public func memberships(for recipe: Recipe, destination: UUID, householdID: UUID?, available: Set<UUID>) throws -> Set<UUID> {
+        guard self.householdID == householdID, recipe.id == recipeID, available.contains(destination),
+              sourceCollectionID.map({ available.contains($0) && recipe.collectionIDs.contains($0) }) ?? true else {
+            throw SupperError.invalid("This recipe or collection has changed. Try dragging it again.")
+        }
+        var ids = recipe.collectionIDs
+        if let sourceCollectionID { ids.remove(sourceCollectionID) }
+        ids.insert(destination)
+        return ids
+    }
+}
+
 public struct Recipe: Identifiable, Hashable, Sendable {
     public var id: UUID
     public var title: String
