@@ -353,7 +353,7 @@ import XCTest
         XCTAssertTrue(tagInput.waitForExistence(timeout: 5))
         tagInput.tap(); tagInput.typeText("Weeknight")
         app.buttons["addSingleRecipeTag"].tap()
-        app.buttons["Done"].firstMatch.tap()
+        app.navigationBars["Tags"].buttons["Done"].tap()
         XCTAssertTrue(app.buttons["recipeTags"].waitForExistence(timeout: 5))
         app.buttons["recipeTags"].tap()
         XCTAssertTrue(app.staticTexts["Weeknight"].waitForExistence(timeout: 5))
