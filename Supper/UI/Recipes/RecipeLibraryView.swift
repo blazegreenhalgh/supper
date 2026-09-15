@@ -5,12 +5,6 @@ extension UTType {
     static let supperRecipeCard = UTType(exportedAs: "app.supper.recipe-card", conformingTo: .data)
 }
 
-extension RecipeDragItem: Transferable {
-    public static var transferRepresentation: some TransferRepresentation {
-        CodableRepresentation(contentType: .supperRecipeCard)
-    }
-}
-
 struct RecipeLibraryView: View {
     @EnvironmentObject private var store: RecipeStore
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -91,14 +85,10 @@ struct RecipeLibraryView: View {
                                 .padding(.vertical, 6)
                                 .background(dropTarget == collection.id ? Color.accentColor.opacity(0.1) : .clear, in: .rect(cornerRadius: 20))
                                 .contentShape(.rect)
-                                .dropDestination(for: RecipeDragItem.self) { items, _ in
-                                    guard items.count == 1, let item = items.first else { return false }
-                                    do { try store.moveRecipe(item, to: collection.id); return true }
-                                    catch { store.errorMessage = error.localizedDescription; return false }
-                                } isTargeted: { targeted in
+                                .onDrop(of: [.supperRecipeCard], isTargeted: Binding(get: { dropTarget == collection.id }, set: { targeted in
                                     if targeted { dropTarget = collection.id }
                                     else if dropTarget == collection.id { dropTarget = nil }
-                                }
+                                })) { providers in receiveDrop(providers, into: collection.id) }
                                 .accessibilityElement(children: .contain).accessibilityIdentifier("collectionDrop-" + collection.name)
                         }
                     }
@@ -166,7 +156,7 @@ struct RecipeLibraryView: View {
                             if selected { ids.insert(collection.id) } else { ids.remove(collection.id) }
                             do { try store.setMemberships(ids, recipeID: recipe.id) }
                             catch { store.errorMessage = error.localizedDescription }
-                        }))
+                        })).accessibilityIdentifier("cardCollection-" + collection.name)
                     }
                     Button("Manage collections…", systemImage: "folder.badge.plus") { showingCollections = true }
                 }
@@ -185,10 +175,29 @@ struct RecipeLibraryView: View {
             .transition(.opacity)
             .accessibilityIdentifier(recipe.title == "Chicken with rice" ? "recipe-test-chicken" : "recipe-" + recipe.id.uuidString)
         if let householdID = store.activeHouseholdID {
-            card.draggable(RecipeDragItem(recipeID: recipe.id, householdID: householdID, sourceCollectionID: UUID(uuidString: section))) {
+            card.onDrag {
+                let item = RecipeDragItem(recipeID: recipe.id, householdID: householdID, sourceCollectionID: UUID(uuidString: section))
+                guard let data = try? JSONEncoder().encode(item) else { return NSItemProvider() }
+                return NSItemProvider(item: data as NSData, typeIdentifier: UTType.supperRecipeCard.identifier)
+            } preview: {
                 RecipeCardView(recipe: recipe).padding(12).frame(width: 180).background(SupperStyle.canvas, in: .rect(cornerRadius: 20))
             }
         } else { card }
+    }
+
+    private func receiveDrop(_ providers: [NSItemProvider], into collectionID: UUID) -> Bool {
+        guard providers.count == 1, let provider = providers.first,
+              provider.hasItemConformingToTypeIdentifier(UTType.supperRecipeCard.identifier) else { return false }
+        provider.loadDataRepresentation(forTypeIdentifier: UTType.supperRecipeCard.identifier) { data, _ in
+            Task { @MainActor in
+                do {
+                    guard let data else { throw SupperError.invalid("Couldn't read that recipe card. Try dragging it again.") }
+                    let item = try JSONDecoder().decode(RecipeDragItem.self, from: data)
+                    try store.moveRecipe(item, to: collectionID)
+                } catch { store.errorMessage = error.localizedDescription }
+            }
+        }
+        return true
     }
 
 }

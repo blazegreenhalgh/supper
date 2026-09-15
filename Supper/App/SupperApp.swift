@@ -30,6 +30,11 @@ struct SupperApp: App {
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-testing"),
+           ProcessInfo.processInfo.arguments.contains("--ui-testing-disable-animations") {
+            // Menu action tests don't need to wait for the system's glass hover animation.
+            UIView.setAnimationsEnabled(false)
+        }
         if ProcessInfo.processInfo.arguments.contains("--discovery-ui-testing") {
             UserDefaults.standard.set(false, forKey: "discoveryGridView")
         }

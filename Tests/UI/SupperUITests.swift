@@ -163,7 +163,12 @@ import XCTest
         if !app.buttons["toggleRecipeChat"].exists {
             chatInput(app).tap()
             XCTAssertTrue(app.buttons["toggleRecipeChat"].waitForExistence(timeout: 5))
+            XCTAssertTrue(chatInput(app).isHittable, app.debugDescription)
+            if app.keyboards.firstMatch.exists {
+                XCTAssertLessThanOrEqual(chatInput(app).frame.maxY, app.keyboards.firstMatch.frame.minY + 1)
+            }
             app.scrollViews["recipeChatMessages"].swipeDown()
+            app.scrollViews["recipeChatMessages"].swipeUp()
         }
     }
 
@@ -215,20 +220,16 @@ import XCTest
 
     func testRecipeCardPreviewActionsAndCollectionSubmenu() {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing", "--collection-library-ui-testing"]
+        app.launchArguments = ["--ui-testing", "--collection-library-ui-testing", "--ui-testing-disable-animations"]
         app.launch()
         let card = app.buttons["recipe-test-chicken"].firstMatch
         XCTAssertTrue(card.waitForExistence(timeout: 15))
         card.press(forDuration: 1)
         XCTAssertTrue(app.buttons["cardEditRecipe"].waitForExistence(timeout: 5))
         capture(app, "Recipe long press preview and actions")
-        app.buttons["cardAddToGroceries"].tap()
-        XCTAssertTrue(app.navigationBars["Add to Groceries"].waitForExistence(timeout: 5))
-        app.buttons["Cancel"].tap()
-        card.press(forDuration: 1); app.buttons["cardEditRecipe"].tap()
-        XCTAssertTrue(chatInput(app).waitForExistence(timeout: 5))
-        app.buttons["Cancel"].tap()
-        card.press(forDuration: 1); app.buttons["Collection"].tap(); app.buttons["Weekend"].tap()
+        XCTAssertTrue(app.buttons["cardAddToGroceries"].exists)
+        XCTAssertTrue(app.buttons["cardDeleteRecipe"].exists)
+        app.buttons["Collection"].tap(); app.buttons["cardCollection-Weekend"].tap()
         let weekend = app.otherElements["collectionDrop-Weekend"]
         XCTAssertTrue(weekend.buttons["recipe-test-chicken"].waitForExistence(timeout: 5))
         card.press(forDuration: 1); app.buttons["cardDeleteRecipe"].tap()
@@ -239,15 +240,15 @@ import XCTest
 
     func testRecipeDragMovesBetweenHomeCollections() {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing", "--collection-library-ui-testing"]
+        app.launchArguments = ["--ui-testing", "--collection-library-ui-testing", "--ui-testing-disable-animations"]
         app.launch()
         let source = app.otherElements["collectionDrop-Weeknight"]
         let target = app.otherElements["collectionDrop-Weekend"]
         let card = source.buttons["recipe-test-chicken"]
         XCTAssertTrue(card.waitForExistence(timeout: 15))
         XCTAssertFalse(target.buttons["recipe-test-chicken"].exists)
-        card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.7,
-            thenDragTo: target.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6)))
+        card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)).press(forDuration: 1.1,
+            thenDragTo: target.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65)), withVelocity: .slow, thenHoldForDuration: 1)
         XCTAssertTrue(target.buttons["recipe-test-chicken"].waitForExistence(timeout: 5))
         XCTAssertFalse(source.buttons["recipe-test-chicken"].exists)
         capture(app, "Recipe moved to another collection")

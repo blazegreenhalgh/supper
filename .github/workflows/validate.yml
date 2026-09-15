@@ -9,20 +9,46 @@ permissions:
 jobs:
   regression:
     runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [editor, library]
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode 26
         run: sudo xcode-select -s /Applications/Xcode_26.0.app/Contents/Developer
       - name: Domain and persistence regression tests
+        if: matrix.suite == 'library'
         run: swift test
       - name: Build iOS simulator app
         # Keychain tests need a signed simulator app with an application identity.
         # Ad-hoc signing needs no Apple credentials; shipping entitlements are unchanged.
         run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements build
       - name: API key Keychain UI regression test
+        if: matrix.suite == 'library'
         run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath DerivedData -resultBundlePath AIResults -only-testing:SupperUITests/SupperUITests/testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
       - name: Native navigation and editor UI regression tests
-        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath DerivedData -resultBundlePath UIResults -skip-testing:SupperUITests/SupperUITests/testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
+        # Partition the existing suite so keyboard/drag failures and their screenshots
+        # are available without waiting for the unrelated library/Keychain checks.
+        run: |
+          editor_tests=(
+            testChatCollectionChangesApplyToDraftAndOnlyPersistOnSave
+            testRecipeCardPreviewActionsAndCollectionSubmenu
+            testRecipeChatKeepsInputWhenReopenedAndCancelDoesNotSave
+            testRecipeChatPreviewShowsRemovalsAndAppliesAndUndoesInPlace
+            testRecipeChatStaysOpenAcrossEditorsAndProtectsManualChanges
+            testRecipeDragMovesBetweenHomeCollections
+            testRecipePhotosPreviewOriginalAndApplyWithUndoAndUploadOption
+          )
+          selection=(-skip-testing:SupperUITests/SupperUITests/testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests)
+          for test_name in "${editor_tests[@]}"; do
+            if [ '${{ matrix.suite }}' = editor ]; then
+              selection+=("-only-testing:SupperUITests/SupperUITests/$test_name")
+            else
+              selection+=("-skip-testing:SupperUITests/SupperUITests/$test_name")
+            fi
+          done
+          xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath DerivedData -resultBundlePath UIResults "${selection[@]}" CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
       - name: Export navigation screenshots
         if: always()
         run: |
@@ -39,7 +65,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ui-test-results
+          name: ui-test-results-${{ matrix.suite }}
           path: |
             AIResults.xcresult
             UIResults.xcresult
