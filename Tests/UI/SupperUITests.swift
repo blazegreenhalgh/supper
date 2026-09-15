@@ -50,6 +50,7 @@ import XCTest
         let handle = app.buttons["toggleRecipeChat"]
         handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.1, thenDragTo: handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).withOffset(CGVector(dx: 0, dy: 100)))
         XCTAssertFalse(app.buttons["toggleRecipeChat"].exists)
+        XCTAssertLessThan(chatInput(app).frame.height, 65)
         chatInput(app).tap()
         XCTAssertTrue(input.waitForExistence(timeout: 5))
         XCTAssertEqual(input.value as? String, "Add ingredients and a method for naan bread")

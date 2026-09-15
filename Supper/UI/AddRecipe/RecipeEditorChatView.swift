@@ -220,6 +220,8 @@ struct RecipeEditorChatView: View {
     @ObservedObject var session: RecipeChatSession
     @Binding var expanded: Bool
     @FocusState private var inputFocused: Bool
+    @State private var collapseOffset: CGFloat = 0
+    @GestureState private var draggingHandle = false
     @State private var reviewing: RecipeAssistantProposal?
     @State private var reviewingPhoto: RecipePhotoProposal?
     @State private var showingPhotoTools = false
@@ -267,10 +269,14 @@ struct RecipeEditorChatView: View {
             composer
         }
         .supperGlassPanel()
+        .offset(y: collapseOffset)
         .onChange(of: inputFocused) { _, focused in
             if focused && !expanded { withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) { expanded = true } }
         }
         .onChange(of: expanded) { _, value in if !value { inputFocused = false } }
+        .onChange(of: draggingHandle) { _, active in
+            if !active { withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { collapseOffset = 0 } }
+        }
         .sheet(isPresented: $showingAISettings) {
             NavigationStack { AISettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingAISettings = false } } } }
         }
@@ -293,14 +299,21 @@ struct RecipeEditorChatView: View {
                 .frame(maxWidth: .infinity).frame(height: 28).contentShape(.rect)
         }.buttonStyle(.plain).accessibilityLabel("Collapse chat")
             .accessibilityIdentifier("toggleRecipeChat")
-            .simultaneousGesture(DragGesture(minimumDistance: 8).onEnded { value in
-                if value.translation.height > 20 || value.predictedEndTranslation.height > 60 { collapse() }
-            })
+            .simultaneousGesture(DragGesture(minimumDistance: 8, coordinateSpace: .global)
+                .updating($draggingHandle) { _, active, _ in active = true }
+                .onChanged { value in
+                    var transaction = Transaction(animation: nil)
+                    transaction.disablesAnimations = true
+                    withTransaction(transaction) { collapseOffset = max(0, min(value.translation.height, 120)) }
+                }
+                .onEnded { value in
+                    if value.translation.height > 20 || value.predictedEndTranslation.height > 60 { collapse() }
+                })
     }
 
     private func collapse() {
         inputFocused = false
-        withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) { expanded = false }
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) { expanded = false; collapseOffset = 0 }
     }
 
     private var reviewActions: some View {
@@ -387,7 +400,7 @@ struct RecipeEditorChatView: View {
 
     private var composer: some View {
         VStack(spacing: 8) {
-            if session.input.count > 1200 { Text("Keep your request under 1,200 characters.").font(.caption).foregroundStyle(.secondary) }
+            if expanded && session.input.count > 1200 { Text("Keep your request under 1,200 characters.").font(.caption).foregroundStyle(.secondary) }
             HStack(alignment: .bottom, spacing: 10) {
                 if expanded {
                 Menu("Photo options", systemImage: "photo.badge.plus") {
@@ -398,7 +411,7 @@ struct RecipeEditorChatView: View {
                     .disabled(session.busy).accessibilityIdentifier("chatPhotoOptions")
                 }
                 TextField(session.pending?.base == draft ? "Refine this suggestion…" : "Ask about this recipe…", text: $session.input, axis: .vertical)
-                    .lineLimit(1...3).padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 44)
+                    .lineLimit(expanded ? 1...3 : 1...1).padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 44)
                     .background(expanded ? Color.primary.opacity(0.05) : .clear, in: .capsule).focused($inputFocused)
                     .accessibilityIdentifier("recipeChatInput")
                     .accessibilityLabel("Ask about this recipe")
