@@ -21,6 +21,10 @@ final class RecipeStore: ObservableObject {
     @Published private(set) var recipes: [Recipe] = []
     @Published private(set) var groceryItems: [GroceryItem] = []
     @Published private(set) var collections: [RecipeCollection] = []
+    @Published private(set) var tags: [String] = []
+    // Catalog entries use an existing synced record type, with an order reserved
+    // outside the nonnegative collection order. No CloudKit schema rollout is needed.
+    private static let tagCatalogOrder = Int.min
     @Published private(set) var allRecipesSection = RecipeCollection(id: RecipeCollection.allRecipesID, name: "All recipes", isOnHome: true, order: Int.max)
     var collectionSections: [RecipeCollection] {
         (collections + [allRecipesSection]).sorted {
@@ -183,6 +187,52 @@ final class RecipeStore: ObservableObject {
         let ids = offsets.filter { groceryItems.indices.contains($0) }.flatMap { groceryItems[$0].contributionIDs }
         try changeContributions(ids) { $0.removed = true }
     }
+    func clearAllGroceryItems() throws {
+        try mutate { _, root in
+            for item in root.groceryItems?.allObjects as? [GroceryItemMO] ?? [] { item.removed = true }
+        }
+    }
+
+    func saveTag(_ name: String, replacing original: String? = nil) throws {
+        let name = RecipeTagNames.clean(name)
+        guard !name.isEmpty else { throw SupperError.invalid("Give the tag a name.") }
+        try mutate { context, root in
+            let catalog = (root.collections?.allObjects as? [RecipeCollectionMO] ?? []).filter {
+                $0.order?.intValue == Self.tagCatalogOrder && $0.removed?.boolValue != true
+            }
+            let matching = catalog.filter { $0.name?.caseInsensitiveCompare(name) == .orderedSame }
+            let old = original.map { original in catalog.filter { $0.name?.caseInsensitiveCompare(original) == .orderedSame } } ?? []
+            let entry = matching.first ?? old.first ?? RecipeCollectionMO(entity: NSEntityDescription.entity(forEntityName: "RecipeCollection", in: context)!, insertInto: context)
+            if entry.isInserted { assign(entry, root: root, context: context) }
+            entry.id = entry.id ?? UUID(); entry.name = name; entry.library = root
+            entry.order = NSNumber(value: Self.tagCatalogOrder); entry.isOnHome = false; entry.removed = false
+            for duplicate in matching + old where duplicate != entry { duplicate.removed = true }
+            if let original {
+                for recipe in root.recipes?.allObjects as? [RecipeMO] ?? [] {
+                    let tags = Self.decodeStrings(recipe.tagsJSON)
+                    guard tags.contains(where: { $0.caseInsensitiveCompare(original) == .orderedSame }) else { continue }
+                    recipe.tagsJSON = Self.encodeStrings(RecipeTagNames.normalized(tags.map {
+                        $0.caseInsensitiveCompare(original) == .orderedSame ? name : $0
+                    }))
+                }
+            }
+        }
+    }
+
+    func deleteTag(_ name: String) throws {
+        try mutate { _, root in
+            for entry in root.collections?.allObjects as? [RecipeCollectionMO] ?? []
+                where entry.order?.intValue == Self.tagCatalogOrder && entry.name?.caseInsensitiveCompare(name) == .orderedSame {
+                entry.removed = true
+            }
+            for recipe in root.recipes?.allObjects as? [RecipeMO] ?? [] {
+                let tags = Self.decodeStrings(recipe.tagsJSON)
+                let kept = tags.filter { $0.caseInsensitiveCompare(name) != .orderedSame }
+                if kept != tags { recipe.tagsJSON = Self.encodeStrings(kept) }
+            }
+        }
+    }
+
     private func changeContributions(_ ids: [UUID], action: (GroceryItemMO) -> Void) throws {
         try mutate { context, root in
             let request = NSFetchRequest<GroceryItemMO>(entityName: "GroceryItem")
@@ -377,7 +427,7 @@ final class RecipeStore: ObservableObject {
         hiddenLibraryCount = allRoots.count - roots.count
         households = roots.compactMap { root in root.id.map { HouseholdSummary(id: $0, name: root.name ?? "Supper", incoming: root.objectID.persistentStore == persistence.sharedStore) } }
         guard let root = library, roots.contains(where: { $0.objectID == root.objectID }) else {
-            recipes = []; groceryItems = []; collections = []; members = []
+            recipes = []; groceryItems = []; collections = []; tags = []; members = []
             cloudMessage = "This household is no longer available. Choose another library in Household settings."
             return
         }
@@ -392,8 +442,10 @@ final class RecipeStore: ObservableObject {
         }.sorted { $0.order == $1.order ? $0.id.uuidString < $1.id.uuidString : $0.order < $1.order }
         allRecipesSection = storedSections.first { $0.id == RecipeCollection.allRecipesID }
             ?? RecipeCollection(id: RecipeCollection.allRecipesID, name: "All recipes", isOnHome: true, order: Int.max)
-        collections = storedSections.filter { $0.id != RecipeCollection.allRecipesID }
+        collections = storedSections.filter { $0.id != RecipeCollection.allRecipesID && $0.order != Self.tagCatalogOrder }
         recipes = (root.recipes?.allObjects as? [RecipeMO] ?? []).map { Self.domainRecipe($0, members: members, collections: collections) }.sorted { $0.createdAt > $1.createdAt }
+        let declaredTags = storedSections.filter { $0.order == Self.tagCatalogOrder }.map(\.name)
+        tags = RecipeTagNames.normalized(declaredTags + recipes.flatMap(\.tags)).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
         let contributions = (root.groceryItems?.allObjects as? [GroceryItemMO] ?? []).filter { $0.removed?.boolValue != true }
         // A repeated operation delivered twice is projected once; a removed copy suppresses retries.
         let removedKeys = Set((root.groceryItems?.allObjects as? [GroceryItemMO] ?? []).filter { $0.removed?.boolValue == true }.compactMap(\.operationKey))

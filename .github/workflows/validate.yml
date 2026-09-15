@@ -24,9 +24,9 @@ jobs:
         # Keychain tests need a signed simulator app with an application identity.
         # Ad-hoc signing needs no Apple credentials; shipping entitlements are unchanged.
         run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements build
-      - name: Section and collection UI regression tests
+      - name: Changed screens UI regression tests
         if: matrix.suite == 'editor'
-        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath SectionResults -only-testing:SupperUITests/SupperUITests/testIngredientAndSectionDragsPersistOnSave -only-testing:SupperUITests/SupperUITests/testRecipeCardPreviewActionsAndCollectionSubmenu CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
+        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath SectionResults -only-testing:SupperUITests/SupperUITests/testIngredientAndSectionDragsPersistOnSave -only-testing:SupperUITests/SupperUITests/testRecipeCardPreviewActionsAndCollectionSubmenu -only-testing:SupperUITests/SupperUITests/testMainTagsCreateRenameDeleteAndIndividualEntry -only-testing:SupperUITests/SupperUITests/testGroceriesCanClearCheckedAndUncheckedItems -only-testing:SupperUITests/SupperUITests/testFormattingReviewCancelAndDraftOnlyApply -only-testing:SupperUITests/SupperUITests/testTagsSheetAndSimpleGrocerySelection -only-testing:SupperUITests/SupperUITests/testHomepageActionsAndActiveFilters CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
       - name: API key Keychain UI regression test
         if: matrix.suite == 'library'
         run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath AIResults -only-testing:SupperUITests/SupperUITests/testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
@@ -42,7 +42,7 @@ jobs:
             testRecipeDragMovesBetweenHomeCollections
             testRecipePhotosPreviewOriginalAndApplyWithUndoAndUploadOption
           )
-          selection=(-skip-testing:SupperUITests/SupperUITests/testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests -skip-testing:SupperUITests/SupperUITests/testIngredientAndSectionDragsPersistOnSave -skip-testing:SupperUITests/SupperUITests/testRecipeCardPreviewActionsAndCollectionSubmenu)
+          selection=(-skip-testing:SupperUITests/SupperUITests/testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests -skip-testing:SupperUITests/SupperUITests/testMainTagsCreateRenameDeleteAndIndividualEntry -skip-testing:SupperUITests/SupperUITests/testGroceriesCanClearCheckedAndUncheckedItems -skip-testing:SupperUITests/SupperUITests/testFormattingReviewCancelAndDraftOnlyApply -skip-testing:SupperUITests/SupperUITests/testTagsSheetAndSimpleGrocerySelection -skip-testing:SupperUITests/SupperUITests/testHomepageActionsAndActiveFilters -skip-testing:SupperUITests/SupperUITests/testIngredientAndSectionDragsPersistOnSave -skip-testing:SupperUITests/SupperUITests/testRecipeCardPreviewActionsAndCollectionSubmenu)
           for test_name in "${editor_tests[@]}"; do
             if [ '${{ matrix.suite }}' = editor ]; then
               selection+=("-only-testing:SupperUITests/SupperUITests/$test_name")

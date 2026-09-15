@@ -10,7 +10,6 @@ struct AddRecipeView: View {
     @State private var draft: RecipeDraft
     @State private var photoItem: PhotosPickerItem?
     @State private var urlText: String
-    @State private var tagsText: String
     @State private var showingURLImport = false
     @State private var showingAssistant = false
     @State private var showingChat = false
@@ -25,20 +24,19 @@ struct AddRecipeView: View {
         self.onSaveDraft = onSaveDraft
         _draft = State(initialValue: recipe.map(RecipeDraft.init(recipe:)) ?? RecipeDraft())
         _urlText = State(initialValue: recipe?.sourceURL?.absoluteString ?? "")
-        _tagsText = State(initialValue: recipe?.tags.joined(separator: ", ") ?? "")
     }
     var body: some View {
         editor
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 Button { showingChat = true } label: {
-                    Text(recipeChat.input.isEmpty ? "Ask about this recipe…" : recipeChat.input)
+                    Text(recipeChat.input.isEmpty ? "Edit this recipe…" : recipeChat.input)
                         .font(.body).foregroundStyle(.secondary).lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 20).frame(minHeight: 56)
                 }
                 .buttonStyle(.plain).supperGlassSurface()
                 .frame(maxWidth: 420).padding(.horizontal, 24).padding(.bottom, 8)
-                .accessibilityLabel("Ask about this recipe")
+                .accessibilityLabel("Edit this recipe")
                 .accessibilityHint("Opens recipe chat")
                 .accessibilityIdentifier("openRecipeChat")
             }
@@ -115,8 +113,8 @@ struct AddRecipeView: View {
                 }
                 Section("Details") {
                     NavigationLink {
-                        RecipeTagsEditor(tagsText: $tagsText, draft: draft)
-                    } label: { editorLink("Tags", systemImage: "tag", detail: parsedTags.isEmpty ? "Add" : "\(parsedTags.count)") }
+                        RecipeTagsEditor(tags: $draft.tags, draft: draft)
+                    } label: { editorLink("Tags", systemImage: "tag", detail: draft.tags.isEmpty ? "Add" : "\(draft.tags.count)") }
                     NavigationLink {
                         DraftCollectionsEditor(selected: $draft.collectionIDs)
                     } label: { editorLink("Collections", systemImage: "folder", detail: draft.collectionIDs.isEmpty ? "Add" : "\(draft.collectionIDs.count)") }
@@ -155,18 +153,13 @@ struct AddRecipeView: View {
     private var assistantDraft: Binding<RecipeDraft> {
         Binding(get: {
             var value = draft
-            value.tags = parsedTags
             let source = urlText.trimmingCharacters(in: .whitespacesAndNewlines)
             value.sourceURL = source.isEmpty ? nil : URL(string: source)
             return value
         }, set: { draft = $0 })
     }
-    private var parsedTags: [String] {
-        var seen = Set<String>()
-        return tagsText.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
-    }
     private func imported(_ value: RecipeDraft) {
-        draft = value; urlText = value.sourceURL?.absoluteString ?? ""; tagsText = value.tags.joined(separator: ", ")
+        draft = value; urlText = value.sourceURL?.absoluteString ?? ""
         showingURLImport = false; showingAssistant = false
     }
     private func editorLink(_ title: String, systemImage: String, detail: String) -> some View {
@@ -184,7 +177,7 @@ struct AddRecipeView: View {
                 guard let url = URL(string: source), ["http", "https"].contains(url.scheme ?? ""), url.host != nil else { throw SupperError.invalid("Use a complete http or https source URL, or leave it empty.") }
                 draft.sourceURL = url
             } else { draft.sourceURL = nil }
-            draft.tags = parsedTags
+            draft.tags = RecipeTagNames.normalized(draft.tags)
             guard draft.servings.map({ $0 > 0 }) ?? true, draft.durationMinutes.map({ $0 > 0 }) ?? true else {
                 throw SupperError.invalid("Servings and duration must be positive, or leave them empty.")
             }
