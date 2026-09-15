@@ -31,16 +31,17 @@ struct AddRecipeView: View {
     var body: some View {
         GeometryReader { geometry in
             editor
-                // An overlay cannot enlarge the navigation stack's proposed size
-                // when the keyboard or the chat's contents change.
-                .frame(width: geometry.size.width, height: geometry.size.height)
                 .contentMargins(.bottom, chatHeight, for: .scrollContent)
-                .overlay(alignment: .bottom) {
-                RecipeEditorChatView(draft: assistantDraft, session: recipeChat, expanded: $chatExpanded)
-                    .frame(height: chatExpanded ? min(380, geometry.size.height * 0.65, max(180, geometry.size.height * 0.48)) : 56)
-                    .frame(maxWidth: chatExpanded ? 680 : 420)
-                    .padding(.horizontal, chatExpanded ? 12 : 24)
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chatHeight = $0 }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    // Use the system's keyboard-aware bottom anchor without adding
+                    // a filled footer or taking space away from the editor.
+                    Color.clear.frame(height: 0).overlay(alignment: .bottom) {
+                        RecipeEditorChatView(draft: assistantDraft, session: recipeChat, expanded: $chatExpanded)
+                            .frame(height: chatExpanded ? min(380, max(180, geometry.size.height * 0.48)) : 56)
+                            .frame(maxWidth: chatExpanded ? 680 : 420)
+                            .padding(.horizontal, chatExpanded ? 12 : 24)
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chatHeight = $0 }
+                    }
                 }
         }
         .onAppear {

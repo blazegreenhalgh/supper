@@ -64,7 +64,7 @@ UI coverage includes opening AI settings, saving/replacing/removing a fixture ke
 
 Photo tests cover metadata provenance, unsafe URLs, preservation of newer recipe edits, stale photo rejection, photo undo, image-edit request bytes/model/fidelity and action routing schema. DEBUG `--ui-testing --recipe-photo-ui-testing` stages image fixtures for native comparison, source-preview, apply/undo and upload-option UI coverage; it performs no paid requests.
 
-CI ad-hoc-signs simulator builds with `Tests/UI/Simulator.entitlements` so real Keychain operations have an app identity. This simulator-only identity is passed by the workflow, never used by device or distribution builds. The focused Keychain test runs before the remaining UI suite for faster diagnostics; shipping signing and Keychain protection are unchanged.
+CI ad-hoc-signs simulator builds with `Tests/UI/Simulator.entitlements` so real Keychain operations have an app identity. This simulator-only identity is passed by the workflow, never used by device or distribution builds. Editor interactions run separately from library checks; the library job runs the focused Keychain test first. Shipping signing and Keychain protection are unchanged.
 
 Live acceptance after entering a funded key:
 1. Test connection; find published recipes with exclusions and duration constraints. Verify each source.

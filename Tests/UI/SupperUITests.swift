@@ -1,6 +1,11 @@
 import XCTest
 
 @MainActor final class SupperUITests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+    }
+
     func testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests() {
         let app = launch()
         app.buttons["Library options"].tap()
@@ -181,8 +186,7 @@ import XCTest
         capture(app, "Warm kitchen craving input")
         app.buttons["A cosy one-pot dinner"].tap()
         app.buttons["findDiscoveryRecipes"].tap()
-        // SwiftUI's labelled indeterminate ProgressView is not exposed as an
-        // XCTest ProgressIndicator. The visible Cancel control identifies this state.
+        // The cooking animation keeps cancellation available throughout the search.
         XCTAssertTrue(app.buttons["cancelDiscoverySearch"].waitForExistence(timeout: 5))
         capture(app, "Discovery searching with stirring pot and steam")
         app.buttons["cancelDiscoverySearch"].tap()
@@ -233,7 +237,7 @@ import XCTest
         let weekend = app.otherElements["collectionDrop-Weekend"]
         XCTAssertTrue(weekend.buttons["recipe-test-chicken"].waitForExistence(timeout: 5))
         card.press(forDuration: 1); app.buttons["cardDeleteRecipe"].tap()
-        XCTAssertTrue(app.buttons["Delete recipe"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.alerts["Delete recipe?"].waitForExistence(timeout: 5))
         app.buttons["Cancel"].tap()
         XCTAssertTrue(card.exists)
     }
@@ -247,6 +251,12 @@ import XCTest
         let card = source.buttons["recipe-test-chicken"]
         XCTAssertTrue(card.waitForExistence(timeout: 15))
         XCTAssertFalse(target.buttons["recipe-test-chicken"].exists)
+        // Keep both sections away from the bottom auto-scroll region. A drag to
+        // a screen-edge coordinate becomes stale as the library scrolls beneath it.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.7)).press(forDuration: 0.05,
+            thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)), withVelocity: .slow, thenHoldForDuration: 0)
+        XCTAssertTrue(card.isHittable)
+        XCTAssertLessThan(target.frame.maxY, app.tabBars.firstMatch.frame.minY - 20)
         card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)).press(forDuration: 1.1,
             thenDragTo: target.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65)), withVelocity: .slow, thenHoldForDuration: 1)
         XCTAssertTrue(target.buttons["recipe-test-chicken"].waitForExistence(timeout: 5))

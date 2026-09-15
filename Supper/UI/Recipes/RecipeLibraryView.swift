@@ -125,14 +125,13 @@ struct RecipeLibraryView: View {
         .sheet(isPresented: $showingAddRecipe) { AddRecipeView() }
         .sheet(item: $editingRecipe) { AddRecipeView(recipe: $0) }
         .sheet(item: $groceryRecipe) { AddIngredientsToGroceryView(recipe: $0, servings: $0.servings) }
-        .confirmationDialog("Delete recipe?", isPresented: Binding(get: { deletingRecipe != nil }, set: { if !$0 { deletingRecipe = nil } }), titleVisibility: .visible) {
+        .alert("Delete recipe?", isPresented: Binding(get: { deletingRecipe != nil }, set: { if !$0 { deletingRecipe = nil } }), presenting: deletingRecipe) { recipe in
             Button("Delete recipe", role: .destructive) {
-                guard let recipe = deletingRecipe else { return }
                 do { try store.deleteRecipe(recipe); deletingRecipe = nil }
                 catch { store.errorMessage = error.localizedDescription }
             }
             Button("Cancel", role: .cancel) { deletingRecipe = nil }
-        } message: { Text("Delete \(deletingRecipe?.title ?? "this recipe") from the household library?") }
+        } message: { recipe in Text("Delete \(recipe.title) from the household library?") }
         .sheet(isPresented: $showingDiscovery) { RecipeDiscoveryView(model: discovery) }
         .sheet(isPresented: $showingCollections) { CollectionsView() }
         .sheet(isPresented: $showingHousehold) { HouseholdSettingsView() }
@@ -141,8 +140,8 @@ struct RecipeLibraryView: View {
     }
     @ViewBuilder private func recipeLink(_ recipe: Recipe, section: String = "all") -> some View {
         let route = RecipeRoute(recipeID: recipe.id, section: section)
-        let card = NavigationLink(value: route) {
-            RecipeCardView(recipe: recipe, transition: RecipeTransitionSource(id: route.sourceID, namespace: transition))
+        NavigationLink(value: route) {
+            draggableCard(recipe, route: route, section: section)
         }.buttonStyle(.plain)
             .contextMenu {
                 Button("Open recipe", systemImage: "arrow.up.right") { openRecipe(route) }
@@ -174,6 +173,10 @@ struct RecipeLibraryView: View {
             }
             .transition(.opacity)
             .accessibilityIdentifier(recipe.title == "Chicken with rice" ? "recipe-test-chicken" : "recipe-" + recipe.id.uuidString)
+    }
+
+    @ViewBuilder private func draggableCard(_ recipe: Recipe, route: RecipeRoute, section: String) -> some View {
+        let card = RecipeCardView(recipe: recipe, transition: RecipeTransitionSource(id: route.sourceID, namespace: transition))
         if let householdID = store.activeHouseholdID {
             card.onDrag {
                 let item = RecipeDragItem(recipeID: recipe.id, householdID: householdID, sourceCollectionID: UUID(uuidString: section))

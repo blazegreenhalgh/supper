@@ -232,7 +232,10 @@ struct RecipeEditorChatView: View {
         VStack(spacing: 0) {
             if expanded {
             grabber
-            reviewActions.frame(maxWidth: .infinity, alignment: .trailing).padding(.horizontal, 16)
+            if !session.photos.isEmpty || session.pending != nil || !session.undoStack.isEmpty {
+                reviewActions.fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .trailing).padding(.horizontal, 16)
+            }
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 22) {
@@ -266,7 +269,7 @@ struct RecipeEditorChatView: View {
                 .onAppear { proxy.scrollTo("chatBottom", anchor: .bottom) }
             }
             }
-            composer
+            composer.fixedSize(horizontal: false, vertical: true).layoutPriority(1)
         }
         .supperGlassPanel()
         .offset(y: collapseOffset)
@@ -411,7 +414,8 @@ struct RecipeEditorChatView: View {
                     .disabled(session.busy).accessibilityIdentifier("chatPhotoOptions")
                 }
                 TextField(session.pending?.base == draft ? "Refine this suggestion…" : "Ask about this recipe…", text: $session.input, axis: .vertical)
-                    .lineLimit(expanded ? 1...3 : 1...1).padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 44)
+                    .lineLimit(expanded ? 1...3 : 1...1).fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 44)
                     .background(expanded ? Color.primary.opacity(0.05) : .clear, in: .capsule).focused($inputFocused)
                     .accessibilityIdentifier("recipeChatInput")
                     .accessibilityLabel("Ask about this recipe")
