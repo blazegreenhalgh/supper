@@ -157,7 +157,9 @@ import XCTest
         capture(app, "Centred craving input and animated glow")
         app.buttons["A cosy one-pot dinner"].tap()
         app.buttons["findDiscoveryRecipes"].tap()
-        XCTAssertTrue(app.progressIndicators["discoveryProgress"].waitForExistence(timeout: 5))
+        // SwiftUI's labelled indeterminate ProgressView is not exposed as an
+        // XCTest ProgressIndicator. The visible Cancel control identifies this state.
+        XCTAssertTrue(app.buttons["cancelDiscoverySearch"].waitForExistence(timeout: 5))
         capture(app, "Discovery searching with orbiting halo")
         app.buttons["cancelDiscoverySearch"].tap()
         XCTAssertTrue(app.buttons["findDiscoveryRecipes"].waitForExistence(timeout: 5))

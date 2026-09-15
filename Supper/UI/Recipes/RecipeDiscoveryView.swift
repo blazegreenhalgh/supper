@@ -167,7 +167,7 @@ struct RecipeDiscoveryView: View {
                         .font(.largeTitle.bold()).multilineTextAlignment(.center)
                     VStack(spacing: 16) {
                         HStack(alignment: .center, spacing: 12) {
-                            TextField("A dish, a mood, an ingredient…", text: $model.prompt, axis: .vertical)
+                            TextField("A dish or a mood…", text: $model.prompt, axis: .vertical)
                                 .lineLimit(1...4).font(.title3).multilineTextAlignment(.center)
                                 .focused($promptFocused).accessibilityIdentifier("discoveryPrompt")
                                 .accessibilityLabel("What are you craving?")
