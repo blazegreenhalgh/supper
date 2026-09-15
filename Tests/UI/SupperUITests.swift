@@ -1,6 +1,29 @@
 import XCTest
 
 @MainActor final class SupperUITests: XCTestCase {
+    func testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests() {
+        let app = launch()
+        app.buttons["Library options"].tap()
+        app.buttons["Household"].tap()
+        app.buttons["openAISettings"].tap()
+        let field = app.secureTextFields["openAIKeyInput"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap(); field.typeText("sk-ui-test-not-a-real-key-1234567890")
+        app.buttons["saveOpenAIKey"].tap()
+        XCTAssertTrue(app.staticTexts["API key saved on this device"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Test connection"].exists)
+        // Never test a live connection with a fixture key.
+        app.terminate(); app.launch()
+        app.buttons["Library options"].tap(); app.buttons["Household"].tap(); app.buttons["openAISettings"].tap()
+        XCTAssertTrue(app.staticTexts["API key saved on this device"].waitForExistence(timeout: 5))
+        let replacement = app.secureTextFields["openAIKeyInput"]
+        replacement.tap(); replacement.typeText("sk-ui-test-replacement-key-1234567890")
+        app.buttons["saveOpenAIKey"].tap()
+        app.buttons["Remove key"].tap()
+        app.buttons["Remove key"].lastMatch.tap()
+        XCTAssertTrue(app.staticTexts["Connect your OpenAI account"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Test connection"].exists)
+    }
     func testRecipeChatKeepsInputWhenReopenedAndCancelDoesNotSave() {
         let app = launch(); openRecipe(app)
         app.buttons["editRecipe"].tap()

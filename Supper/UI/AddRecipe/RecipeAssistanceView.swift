@@ -18,7 +18,8 @@ struct RecipeAssistanceView: View {
                     PhotosPicker(selection: $photo, matching: .images) { Label("Read screenshot or cookbook photo", systemImage: "text.viewfinder") }.disabled(progress != nil)
                 } header: { Text("Paste recipe text") } footer: { Text("A meal photo can be added directly in the recipe editor. Supper won't guess ingredients from its appearance.") }
                 Section {
-                    Text(OnDeviceRecipeAssistant.availabilityDescription).font(.footnote).foregroundStyle(.secondary)
+                    Text("Text recognition stays on-device. Assisted extraction sends the recipe text to OpenAI using your API key; without a key, a basic local draft is available.").font(.footnote).foregroundStyle(.secondary)
+                    NavigationLink("AI settings") { AISettingsView() }
                     if let progress { ProgressView(progress); Button("Cancel processing", role: .cancel) { task?.cancel(); self.progress = nil } }
                     else { Button("Create editable draft", action: structure).disabled(text.isEmpty) }
                 }
@@ -50,10 +51,10 @@ struct RecipeAssistanceView: View {
         }
     }
     private func structure() {
-        task?.cancel(); result = nil; progress = "Preparing draft on this device…"
+        task?.cancel(); result = nil; progress = "Extracting recipe details…"
         task = Task {
             defer { progress = nil }
-            do { let value = try await OnDeviceRecipeAssistant().structure(text); try Task.checkCancellation(); result = value }
+            do { let value = try await CloudRecipeAssistant().structure(text); try Task.checkCancellation(); result = value }
             catch { if !(error is CancellationError) { self.error = error.localizedDescription } }
         }
     }

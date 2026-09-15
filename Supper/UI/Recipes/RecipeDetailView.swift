@@ -313,7 +313,7 @@ private struct FullScreenMethodView: View {
             Divider()
             Text("For this step").font(.headline).accessibilityAddTraits(.isHeader)
             if isMatching {
-                ProgressView("Matching ingredients on device…").font(.caption)
+                ProgressView("Matching recipe ingredients…").font(.caption)
             }
             let relevant = displayedMatches.ingredients(for: steps[currentIndex].id,
                 baseServings: baseServings, selectedServings: selectedServings)
@@ -356,7 +356,7 @@ private struct FullScreenMethodView: View {
         isMatching = true
         defer { isMatching = false }
         do {
-            let result = try await OnDeviceRecipeAssistant().ingredientsByStep(input)
+            let result = try await CloudRecipeAssistant().ingredientsByStep(input)
             try Task.checkCancellation()
             matches = result
         } catch { /* Closing the sheet cancels assistance without changing the recipe. */ }

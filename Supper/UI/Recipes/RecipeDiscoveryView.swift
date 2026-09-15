@@ -72,7 +72,7 @@ final class RecipeDiscoveryModel: ObservableObject {
         RecipeDiscoveryResult(suggestions: ["Lemon chicken bowls", "Creamy mushroom pasta", "Crispy chickpea wraps"].map { title in
             RecipeSuggestion(recipe: Recipe(title: title, durationMinutes: 25, servings: 4, tags: ["Dinner"],
                 ingredients: [Ingredient(name: "rice", quantity: "200", unit: "g"), Ingredient(name: "lemon", quantity: "1")],
-                steps: [RecipeStep(text: "Prepare the ingredients."), RecipeStep(text: "Cook and serve.", order: 1)]), mode: .create)
+                steps: [RecipeStep(text: "Prepare the ingredients."), RecipeStep(text: "Cook and serve.", order: 1)]), mode: .online)
         }, notice: "Preview recipes for UI testing.")
     }
     #endif
@@ -84,6 +84,13 @@ struct RecipeDiscoveryView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ObservedObject var model: RecipeDiscoveryModel
+    @ObservedObject private var aiSettings = OpenAISettings.shared
+    private var canSearch: Bool {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--discovery-ui-testing") { return true }
+        #endif
+        return aiSettings.isConfigured
+    }
     @AppStorage("discoveryGridView") private var gridView = false
     @State private var path: [UUID] = []
     @State private var showingStartOver = false
@@ -152,19 +159,17 @@ struct RecipeDiscoveryView: View {
                 TextField("Something cosy with chicken, under 30 minutes…", text: $model.prompt, axis: .vertical)
                     .lineLimit(3...6).padding(16).background(SupperStyle.surface, in: .rect(cornerRadius: 20))
                     .focused($promptFocused).accessibilityIdentifier("discoveryPrompt")
-                Picker("Recipe source", selection: $model.mode) {
-                    ForEach(RecipeDiscoveryMode.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                }.pickerStyle(.segmented)
-                Text(model.mode == .online ? "Search RecipeTin Eats, Budget Bytes and Skinnytaste, with photos, ingredients and method filled in. Only recipes you keep join your library." : "Create three original recipes with Apple Intelligence on your device. You can edit every detail before keeping them.")
+                Text("Find published recipes across the web, with source links, photos, ingredients and methods. Supper never generates recipes. Only recipes you keep join your library.")
                     .font(.subheadline).foregroundStyle(.secondary)
-                if !RecipeDiscoveryService.canUseAI {
-                    Text("Apple Intelligence isn’t available on this device right now. Online keyword search still works.")
+                if !aiSettings.isConfigured {
+                    Text("Add your OpenAI API key to search. Your request is sent to OpenAI, and recipes are downloaded from their publishers.")
                         .font(.footnote).foregroundStyle(.secondary)
+                    NavigationLink("Set up OpenAI") { AISettingsView() }
                 }
                 Button { promptFocused = false; model.search(in: store) } label: {
-                    Label(model.mode == .online ? "Find my recipes" : "Make me a stack", systemImage: "sparkles").frame(maxWidth: .infinity)
+                    Label("Find my recipes", systemImage: "sparkles").frame(maxWidth: .infinity)
                 }.supperGlassButton(prominent: true).controlSize(.large)
-                    .disabled(model.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.prompt.count > 600 || (model.mode == .create && !RecipeDiscoveryService.canUseAI))
+                    .disabled(model.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.prompt.count > 600 || !canSearch)
                     .accessibilityIdentifier("findDiscoveryRecipes")
                 if model.prompt.count > 600 { Text("Keep your request under 600 characters.").font(.footnote).foregroundStyle(.red) }
                 VStack(alignment: .leading, spacing: 12) {

@@ -1,8 +1,8 @@
 import Foundation
 
-public enum RecipeEditOperation: String, Sendable { case add, update, remove }
+public enum RecipeEditOperation: String, Codable, Sendable { case add, update, remove }
 
-public struct AssistantIngredientEdit: Sendable {
+public struct AssistantIngredientEdit: Codable, Sendable {
     public var operation: RecipeEditOperation
     /// Zero-based index in the supplied draft; -1 for an addition.
     public var index: Int
@@ -16,7 +16,7 @@ public struct AssistantIngredientEdit: Sendable {
     }
 }
 
-public struct AssistantStepEdit: Sendable {
+public struct AssistantStepEdit: Codable, Sendable {
     public var operation: RecipeEditOperation
     public var index: Int
     public var text: String
@@ -28,7 +28,7 @@ public struct AssistantStepEdit: Sendable {
 
 /// A bounded, atomic patch. Existing rows retain identity, order and shopping overrides.
 /// The model cannot replace the photograph, source, collections or household metadata.
-public struct RecipeAssistantPatch: Sendable {
+public struct RecipeAssistantPatch: Codable, Sendable {
     public var title: String?
     public var servings: Int?
     public var durationMinutes: Int?
