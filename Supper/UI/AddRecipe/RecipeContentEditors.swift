@@ -41,9 +41,9 @@ private struct RecipeSectionsEditor<Item: RecipeSectionItem, Row: View>: View {
                                 }
                                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                                 .padding(.vertical, 4).contentShape(.rect)
+                                .onDrag { provider(section: nil, itemID: item.id) }
                             }
                             .buttonStyle(.plain)
-                            .onDrag { provider(section: nil, itemID: item.id) }
                             .onDrop(of: [.supperRecipeContent], isTargeted: target("row-" + item.id.uuidString)) {
                                 receive($0, section: section.title, before: item.id)
                             }
@@ -124,7 +124,10 @@ private struct RecipeSectionsEditor<Item: RecipeSectionItem, Row: View>: View {
                         content.sections.removeAll { $0.id == section.id }
                     }
                 }
-            }.accessibilityLabel("Options for \(section.title.isEmpty ? defaultTitle : section.title)")
+            }
+            .labelStyle(.iconOnly)
+            .frame(minWidth: 32, minHeight: 44)
+            .accessibilityLabel("Options for \(section.title.isEmpty ? defaultTitle : section.title)")
             Button { add(section.title) } label: {
                 Image(systemName: "plus").font(.body.weight(.semibold)).frame(minWidth: 32, minHeight: 44)
             }
