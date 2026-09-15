@@ -33,35 +33,38 @@ private struct RecipeSectionsEditor<Item: RecipeSectionItem, Row: View>: View {
                     VStack(spacing: 0) {
                         ForEach(section.items) { item in
                             if item.id != section.items.first?.id { Divider() }
-                            Button { edit(itemInSection(item, title: section.title)) } label: {
-                                HStack(spacing: 12) {
+                            HStack(spacing: 8) {
+                                Button { edit(itemInSection(item, title: section.title)) } label: {
                                     row(item, content.flattened.firstIndex(where: { $0.id == item.id }) ?? 0)
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                        .padding(.vertical, 4).contentShape(.rect)
                                 }
-                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                                .padding(.vertical, 4).contentShape(.rect)
+                                .buttonStyle(.plain)
                                 .onDrag { provider(section: nil, itemID: item.id) }
+                                .accessibilityHint("Tap to edit. Drag to move to another section.")
+                                Menu {
+                                    Menu("Move to section", systemImage: "folder") {
+                                        ForEach(content.sections) { destination in
+                                            Button(destination.title.isEmpty ? defaultTitle : destination.title) {
+                                                _ = content.moveItem(item.id, to: destination.title)
+                                            }.disabled(destination.id == section.id)
+                                        }
+                                    }
+                                    Button("Delete \(itemName)", systemImage: "trash", role: .destructive) {
+                                        delete([item.id], from: section.title)
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis").frame(width: 32, height: 44)
+                                }
+                                .accessibilityLabel("Options for \(itemName) \((content.flattened.firstIndex(where: { $0.id == item.id }) ?? 0) + 1)")
                             }
-                            .buttonStyle(.plain)
+                            .contentShape(.rect)
                             .onDrop(of: [.supperRecipeContent], isTargeted: target("row-" + item.id.uuidString)) {
                                 receive($0, section: section.title, before: item.id)
                             }
                             .overlay(alignment: .top) {
                                 if dropTarget == "row-" + item.id.uuidString {
                                     Rectangle().fill(Color(uiColor: .systemBlue)).frame(height: 2).allowsHitTesting(false)
-                                }
-                            }
-                            .contextMenu {
-                                Menu("Move to section", systemImage: "folder") {
-                                    ForEach(content.sections) { destination in
-                                        Button(destination.title.isEmpty ? defaultTitle : destination.title) {
-                                            _ = content.moveItem(item.id, to: destination.title)
-                                        }.disabled(destination.id == section.id)
-                                    }
-                                }
-                                Button("Delete \(itemName)", systemImage: "trash", role: .destructive) {
-                                    delete([item.id], from: section.title)
                                 }
                             }
                         }
@@ -87,7 +90,7 @@ private struct RecipeSectionsEditor<Item: RecipeSectionItem, Row: View>: View {
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .accessibilityIdentifier("addRecipeSection")
             .onDrop(of: [.supperRecipeContent], isTargeted: nil) { receive($0, section: nil) }
-            Text("Drag rows between sections or drag a heading to move the whole section. Touch and hold a row for more options.")
+            Text("Drag rows between sections or drag a heading to move the whole section. Tap a row to edit it.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
         .alert(renamedSection == nil ? "New Section" : "Rename Section", isPresented: $namingSection) {
