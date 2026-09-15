@@ -10,7 +10,8 @@ private struct RecipeContentDrag: Codable {
     let itemID: UUID?
 }
 
-/// Native List insertion handles row positioning; headers accept whole sections or rows.
+/// Native GroupBox sections keep drop targets in the scroll content hierarchy.
+/// List supplementary headers do not reliably receive SwiftUI drop interactions.
 private struct RecipeSectionsEditor<Item: RecipeSectionItem, Row: View>: View {
     @Binding var content: RecipeSectionedContent<Item>
     let defaultTitle: String
@@ -26,98 +27,68 @@ private struct RecipeSectionsEditor<Item: RecipeSectionItem, Row: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ForEach(content.sections) { section in
-            Section {
-                ForEach(section.items) { item in
-                    Button { edit(itemInSection(item, title: section.title)) } label: {
-                        HStack(spacing: 12) {
-                            row(item, content.flattened.firstIndex(where: { $0.id == item.id }) ?? 0)
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
-                        }.contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .onDrag { provider(section: nil, itemID: item.id) }
-                    .contextMenu {
-                        Menu("Move to section", systemImage: "folder") {
-                            ForEach(content.sections) { destination in
-                                Button(destination.title.isEmpty ? defaultTitle : destination.title) {
-                                    _ = content.moveItem(item.id, to: destination.title)
-                                }.disabled(destination.id == section.id)
+        VStack(alignment: .leading, spacing: 20) {
+            ForEach(content.sections) { section in
+                GroupBox {
+                    VStack(spacing: 0) {
+                        ForEach(section.items) { item in
+                            if item.id != section.items.first?.id { Divider() }
+                            Button { edit(itemInSection(item, title: section.title)) } label: {
+                                HStack(spacing: 12) {
+                                    row(item, content.flattened.firstIndex(where: { $0.id == item.id }) ?? 0)
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                                .padding(.vertical, 4).contentShape(.rect)
+                            }
+                            .buttonStyle(.plain)
+                            .onDrag { provider(section: nil, itemID: item.id) }
+                            .onDrop(of: [.supperRecipeContent], isTargeted: target("row-" + item.id.uuidString)) {
+                                receive($0, section: section.title, before: item.id)
+                            }
+                            .overlay(alignment: .top) {
+                                if dropTarget == "row-" + item.id.uuidString {
+                                    Rectangle().fill(Color(uiColor: .systemBlue)).frame(height: 2).allowsHitTesting(false)
+                                }
+                            }
+                            .contextMenu {
+                                Menu("Move to section", systemImage: "folder") {
+                                    ForEach(content.sections) { destination in
+                                        Button(destination.title.isEmpty ? defaultTitle : destination.title) {
+                                            _ = content.moveItem(item.id, to: destination.title)
+                                        }.disabled(destination.id == section.id)
+                                    }
+                                }
+                                Button("Delete \(itemName)", systemImage: "trash", role: .destructive) {
+                                    delete([item.id], from: section.title)
+                                }
                             }
                         }
-                        Button("Delete \(itemName)", systemImage: "trash", role: .destructive) {
-                            delete([item.id], from: section.title)
+                        if section.items.isEmpty {
+                            Text("Drop \(itemName == "ingredient" ? "ingredients" : "steps") here or tap +")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
                         }
                     }
-                }
-                .onDelete { offsets in delete(offsets.map { section.items[$0].id }, from: section.title) }
-                .onMove { offsets, destination in
-                    guard let index = content.sections.firstIndex(where: { $0.id == section.id }) else { return }
-                    content.sections[index].items.move(fromOffsets: offsets, toOffset: destination)
-                }
-                .onInsert(of: [.supperRecipeContent]) { offset, providers in
-                    let next = section.items.indices.contains(offset) ? section.items[offset].id : nil
-                    _ = receive(providers, section: section.title, before: next)
-                }
-                if section.items.isEmpty {
-                    Text("Drop \(itemName == "ingredient" ? "ingredients" : "steps") here or tap +")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                        .contentShape(.rect)
-                        .onDrop(of: [.supperRecipeContent], isTargeted: target(section.id)) {
-                            receive($0, section: section.title)
-                        }
-                }
-            } header: {
-                HStack(spacing: 12) {
-                    Text(section.title.isEmpty ? defaultTitle : section.title)
-                        .font(.headline).foregroundStyle(.primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(.rect)
-                        .onDrag { provider(section: section.title, itemID: nil) }
-                        .accessibilityHint("Drag to reorder this section")
-                        .accessibilityIdentifier("recipeSection-" + (section.title.isEmpty ? defaultTitle : section.title))
-                    Menu("Section options", systemImage: "ellipsis") {
-                        Button("Rename section", systemImage: "pencil") {
-                            renamedSection = section.title; sectionName = section.title; namingSection = true
-                        }
-                        Button("Move section to top", systemImage: "arrow.up.to.line") {
-                            _ = content.moveSection(section.title, before: content.sections.first?.title)
-                        }.disabled(content.sections.first?.id == section.id)
-                        Button("Move section to bottom", systemImage: "arrow.down.to.line") {
-                            _ = content.moveSection(section.title, before: nil)
-                        }.disabled(content.sections.last?.id == section.id)
-                        if section.items.isEmpty && content.sections.count > 1 {
-                            Button("Delete empty section", systemImage: "trash", role: .destructive) {
-                                content.sections.removeAll { $0.id == section.id }
-                            }
-                        }
-                    }.accessibilityLabel("Options for \(section.title.isEmpty ? defaultTitle : section.title)")
-                    Button { add(section.title) } label: {
-                        Image(systemName: "plus").font(.body.weight(.semibold)).frame(minWidth: 32, minHeight: 44)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(.rect)
+                    .onDrop(of: [.supperRecipeContent], isTargeted: target(section.id)) {
+                        receive($0, section: section.title)
                     }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("Add \(itemName) to \(section.title.isEmpty ? defaultTitle : section.title)")
-                    .accessibilityIdentifier((itemName == "ingredient" ? "addIngredient" : "addMethodStep") + (content.sections.first?.id == section.id ? "" : "-" + section.title))
+                } label: {
+                    sectionHeader(section)
                 }
-                .textCase(nil)
-                .background(dropTarget == section.id ? Color(uiColor: .systemBlue).opacity(0.12) : .clear, in: .rect(cornerRadius: 10))
-                .contentShape(.rect)
-                .onDrop(of: [.supperRecipeContent], isTargeted: target(section.id)) {
-                    receive($0, section: section.title)
-                }
-                .accessibilityElement(children: .contain)
+                .background(dropTarget == section.id ? Color(uiColor: .systemBlue).opacity(0.12) : .clear, in: .rect(cornerRadius: 16))
             }
-        }
-        Section {
             Button("Add section", systemImage: "plus") {
                 renamedSection = nil; sectionName = ""; namingSection = true
             }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .accessibilityIdentifier("addRecipeSection")
             .onDrop(of: [.supperRecipeContent], isTargeted: nil) { receive($0, section: nil) }
-        } footer: {
-            Text("Drag rows between sections. Drag a section heading to move its contents together. Edit lets you reorder or remove rows.")
+            Text("Drag rows between sections or drag a heading to move the whole section. Touch and hold a row for more options.")
+                .font(.footnote).foregroundStyle(.secondary)
         }
         .alert(renamedSection == nil ? "New Section" : "Rename Section", isPresented: $namingSection) {
             TextField("Section name", text: $sectionName)
@@ -127,6 +98,43 @@ private struct RecipeSectionsEditor<Item: RecipeSectionItem, Row: View>: View {
                 else { _ = content.addSection(sectionName) }
             }.disabled(!canSaveName)
         } message: { Text("For example, Sauce, Dough or To serve.") }
+    }
+
+    private func sectionHeader(_ section: RecipeContentSection<Item>) -> some View {
+        HStack(spacing: 12) {
+            Text(section.title.isEmpty ? defaultTitle : section.title)
+                .font(.headline).foregroundStyle(.primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(.rect)
+                .onDrag { provider(section: section.title, itemID: nil) }
+                .accessibilityHint("Drag to reorder this section")
+                .accessibilityIdentifier("recipeSection-" + (section.title.isEmpty ? defaultTitle : section.title))
+            Menu("Section options", systemImage: "ellipsis") {
+                Button("Rename section", systemImage: "pencil") {
+                    renamedSection = section.title; sectionName = section.title; namingSection = true
+                }
+                Button("Move section to top", systemImage: "arrow.up.to.line") {
+                    _ = content.moveSection(section.title, before: content.sections.first?.title)
+                }.disabled(content.sections.first?.id == section.id)
+                Button("Move section to bottom", systemImage: "arrow.down.to.line") {
+                    _ = content.moveSection(section.title, before: nil)
+                }.disabled(content.sections.last?.id == section.id)
+                if section.items.isEmpty && content.sections.count > 1 {
+                    Button("Delete empty section", systemImage: "trash", role: .destructive) {
+                        content.sections.removeAll { $0.id == section.id }
+                    }
+                }
+            }.accessibilityLabel("Options for \(section.title.isEmpty ? defaultTitle : section.title)")
+            Button { add(section.title) } label: {
+                Image(systemName: "plus").font(.body.weight(.semibold)).frame(minWidth: 32, minHeight: 44)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Add \(itemName) to \(section.title.isEmpty ? defaultTitle : section.title)")
+            .accessibilityIdentifier((itemName == "ingredient" ? "addIngredient" : "addMethodStep") + (content.sections.first?.id == section.id ? "" : "-" + section.title))
+        }
+        .contentShape(.rect)
+        .onDrop(of: [.supperRecipeContent], isTargeted: target(section.id)) { receive($0, section: section.title) }
+        .accessibilityElement(children: .contain)
     }
 
     private var canSaveName: Bool {
@@ -162,7 +170,15 @@ private struct RecipeSectionsEditor<Item: RecipeSectionItem, Row: View>: View {
                             next = content.sections.indices.contains(destination + 1) ? content.sections[destination + 1].title : nil
                         }
                         _ = content.moveSection(title, before: next)
-                    } else if let id = payload.itemID, let section { _ = content.moveItem(id, to: section, before: itemID) }
+                    } else if let id = payload.itemID, let section {
+                        var next = itemID
+                        if let rows = content.sections.first(where: { $0.title == section })?.items,
+                           let source = rows.firstIndex(where: { $0.id == id }),
+                           let destination = rows.firstIndex(where: { $0.id == itemID }), source < destination {
+                            next = rows.indices.contains(destination + 1) ? rows[destination + 1].id : nil
+                        }
+                        _ = content.moveItem(id, to: section, before: next)
+                    }
                     dropTarget = nil
                 }
             }
@@ -183,17 +199,21 @@ struct IngredientListEditor: View {
         Binding(get: { content.flattened }, set: { content.replaceItems($0) })
     }
     var body: some View {
-        List {
+        ScrollView {
+          VStack(alignment: .leading, spacing: 20) {
             RecipeSectionsEditor(content: $content, defaultTitle: "Ingredients", itemName: "ingredient", add: {
                 editing = Ingredient(name: "", group: $0)
             }, edit: { editing = $0 }) { ingredient, _ in IngredientLabel(ingredient: ingredient) }
             if let sourceURL, ["https", "http"].contains(sourceURL.scheme ?? ""), !content.flattened.isEmpty {
-                Section {
+                VStack(alignment: .leading, spacing: 8) {
                     Button("Recover sections from source", systemImage: "arrow.triangle.2.circlepath") { recoveringSections = true }
-                } footer: { Text("Review the source’s ingredient sections before applying them. Your names and amounts stay the same.") }
+                    Text("Review the source’s sections before applying them. Your names and amounts stay the same.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
             }
+          }.padding(20).frame(maxWidth: 720).frame(maxWidth: .infinity)
         }
-        .scrollContentBackground(.hidden).background(SupperStyle.canvas)
+        .background(SupperStyle.canvas)
         .navigationTitle("Ingredients").navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -201,7 +221,6 @@ struct IngredientListEditor: View {
                     .font(.subheadline).disabled(content.flattened.isEmpty)
                     .accessibilityIdentifier("autoFormatIngredients")
             }
-            ToolbarItem(placement: .primaryAction) { EditButton().disabled(content.flattened.isEmpty) }
         }
         .onChange(of: editing?.id) { _, value in onEditingChange(value != nil) }
         .navigationDestination(item: $editing) { ingredient in
@@ -299,7 +318,7 @@ struct MethodListEditor: View {
     var onEditingChange: (Bool) -> Void = { _ in }
     @State private var editing: RecipeStep?
     var body: some View {
-        List {
+        ScrollView {
             RecipeSectionsEditor(content: $content, defaultTitle: "Method", itemName: "step", add: {
                 editing = RecipeStep(text: "", group: $0)
             }, edit: { editing = $0 }) { step, index in
@@ -308,10 +327,10 @@ struct MethodListEditor: View {
                     Text(step.text).font(.body).foregroundStyle(.primary).lineLimit(3)
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 4)
             }
+            .padding(20).frame(maxWidth: 720).frame(maxWidth: .infinity)
         }
-        .scrollContentBackground(.hidden).background(SupperStyle.canvas)
+        .background(SupperStyle.canvas)
         .navigationTitle("Method").navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .primaryAction) { EditButton().disabled(content.flattened.isEmpty) } }
         .onChange(of: editing?.id) { _, value in onEditingChange(value != nil) }
         .navigationDestination(item: $editing) { step in
             MethodStepEditor(step: step, isNew: !content.flattened.contains { $0.id == step.id },
