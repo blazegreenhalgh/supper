@@ -30,6 +30,7 @@ struct AddRecipeView: View {
     var body: some View {
         GeometryReader { geometry in
             editor
+                .contentMargins(.bottom, 20, for: .scrollContent)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     // The inset follows the keyboard and reserves scroll space.
                     // Only the chat has a material; there is no filled footer.
