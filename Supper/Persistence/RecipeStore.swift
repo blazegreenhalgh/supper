@@ -384,8 +384,11 @@ final class RecipeStore: ObservableObject {
         let memberObjects = root.members?.allObjects as? [HouseholdMemberMO] ?? []
         members = memberObjects.compactMap { object in object.id.map { HouseholdMember(id: $0, name: object.name ?? "Household member", accountID: object.accountID) } }
         currentMemberID = ReactionIdentity.canonical(identity.id, members: members)
-        let storedSections = (root.collections?.allObjects as? [RecipeCollectionMO] ?? []).filter { $0.removed?.boolValue != true }.compactMap { object in
-            object.id.map { RecipeCollection(id: $0, name: object.name ?? "Collection", isOnHome: object.isOnHome?.boolValue ?? false, order: object.order?.intValue ?? 0) }
+        let collectionObjects = root.collections?.allObjects as? [RecipeCollectionMO] ?? []
+        let storedSections: [RecipeCollection] = collectionObjects.compactMap { object in
+            guard object.removed?.boolValue != true, let id = object.id else { return nil }
+            return RecipeCollection(id: id, name: object.name ?? "Collection",
+                                    isOnHome: object.isOnHome?.boolValue ?? false, order: object.order?.intValue ?? 0)
         }.sorted { $0.order == $1.order ? $0.id.uuidString < $1.id.uuidString : $0.order < $1.order }
         allRecipesSection = storedSections.first { $0.id == RecipeCollection.allRecipesID }
             ?? RecipeCollection(id: RecipeCollection.allRecipesID, name: "All recipes", isOnHome: true, order: Int.max)
