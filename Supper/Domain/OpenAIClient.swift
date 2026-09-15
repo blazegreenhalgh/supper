@@ -148,11 +148,26 @@ public struct OpenAIResponse: Decodable, Sendable {
     public var didSearch: Bool { output.contains { $0.type == "web_search_call" && $0.status == "completed" } }
     public var sourceURLs: [URL] {
         var seen = Set<URL>()
-        let evidence = output.filter { $0.type == "web_search_call" && $0.status == "completed" }.flatMap { item -> [String] in
-            (item.action?.sources?.compactMap(\.url) ?? []) + (item.action?.type == "open_page" ? [item.action?.url].compactMap { $0 } : [])
-        }.compactMap(RecipeSearchFeed.publicURL).map(RecipeSearchFeed.canonical).filter { seen.insert($0).inserted }
-        let cited = output.flatMap { $0.content ?? [] }.flatMap { $0.annotations ?? [] }
-            .filter { $0.type == "url_citation" }.compactMap(\.url).compactMap(RecipeSearchFeed.publicURL).map(RecipeSearchFeed.canonical)
+        var evidence: [URL] = []
+        var cited: [URL] = []
+        for item in output {
+            if item.type == "web_search_call", item.status == "completed", let action = item.action {
+                var addresses = action.sources?.compactMap(\.url) ?? []
+                if action.type == "open_page", let address = action.url { addresses.append(address) }
+                for address in addresses {
+                    guard let url = RecipeSearchFeed.publicURL(address) else { continue }
+                    let canonical = RecipeSearchFeed.canonical(url)
+                    if seen.insert(canonical).inserted { evidence.append(canonical) }
+                }
+            }
+            for content in item.content ?? [] {
+                for annotation in content.annotations ?? [] {
+                    guard annotation.type == "url_citation", let address = annotation.url,
+                          let url = RecipeSearchFeed.publicURL(address) else { continue }
+                    cited.append(RecipeSearchFeed.canonical(url))
+                }
+            }
+        }
         var ordered = Set<URL>()
         return (cited.filter { seen.contains($0) } + evidence).filter { ordered.insert($0).inserted }
     }
