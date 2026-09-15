@@ -35,73 +35,87 @@ import XCTest
     func testRecipeChatKeepsInputWhenReopenedAndCancelDoesNotSave() {
         let app = launch(); openRecipe(app)
         app.buttons["editRecipe"].tap()
-        XCTAssertTrue(chatInput(app).waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["askRecipeAI"].exists)
+        let launcher = app.buttons["openRecipeChat"]
+        XCTAssertTrue(launcher.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["closeRecipeChat"].exists)
-        XCTAssertFalse(app.buttons["toggleRecipeChat"].exists)
-        XCTAssertLessThan(chatInput(app).frame.height, 65)
-        XCTAssertGreaterThanOrEqual(chatInput(app).frame.minX, 24)
-        capture(app, "Permanent floating AI bar")
+        XCTAssertLessThan(launcher.frame.height, 65)
+        XCTAssertGreaterThanOrEqual(launcher.frame.minX, 24)
+        capture(app, "Compact recipe chat input")
         app.swipeUp()
         let source = app.textFields["Website URL (optional)"]
-        if source.frame.maxY >= chatInput(app).frame.minY {
-            app.collectionViews.firstMatch.swipeUp()
-        }
+        if source.frame.maxY >= launcher.frame.minY { app.collectionViews.firstMatch.swipeUp() }
         XCTAssertTrue(source.isHittable)
-        XCTAssertLessThan(source.frame.maxY, chatInput(app).frame.minY)
-        let field = app.textFields["recipeChatInput"]
-        let input = field.exists ? field : app.textViews["recipeChatInput"]
-        XCTAssertTrue(input.waitForExistence(timeout: 5))
-        input.tap(); input.typeText("Add ingredients and a method for naan bread")
-        XCTAssertLessThanOrEqual(app.buttons["sendRecipeChat"].frame.height, input.frame.height + 1)
-        capture(app, "Recipe assistant with native composer")
-        let handle = app.buttons["toggleRecipeChat"]
-        handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.1, thenDragTo: handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).withOffset(CGVector(dx: 0, dy: 100)))
-        XCTAssertFalse(app.buttons["toggleRecipeChat"].exists)
-        XCTAssertLessThan(chatInput(app).frame.height, 65)
-        chatInput(app).tap()
-        XCTAssertTrue(input.waitForExistence(timeout: 5))
-        XCTAssertEqual(input.value as? String, "Add ingredients and a method for naan bread")
+        XCTAssertLessThan(source.frame.maxY, launcher.frame.minY)
+
+        expandRecipeChat(app)
+        let input = chatInput(app)
+        input.tap(); input.typeText("F")
+        XCTAssertEqual(app.buttons["sendRecipeChat"].frame.height, input.frame.height, accuracy: 1)
+        XCTAssertLessThanOrEqual(input.frame.maxY, app.keyboards.firstMatch.frame.minY + 1)
+        XCTAssertGreaterThan(app.scrollViews["recipeChatMessages"].frame.height, 200)
+        input.typeText("ind ingredients and a method for naan bread")
+        capture(app, "Native chat sheet with keyboard")
+
+        // Scrolling the conversation dismisses only the keyboard. The system
+        // grabber independently changes the sheet's detent and dismisses it.
+        app.scrollViews["recipeChatMessages"].swipeDown()
+        XCTAssertTrue(app.buttons["closeRecipeChat"].exists)
+        if app.keyboards.firstMatch.exists { app.buttons["hideRecipeChatKeyboard"].tap() }
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        let largeHeight = app.scrollViews["recipeChatMessages"].frame.height
+        dragChatGrabber(app, to: 0.52)
+        XCTAssertTrue(app.buttons["closeRecipeChat"].exists)
+        XCTAssertLessThan(app.scrollViews["recipeChatMessages"].frame.height, largeHeight - 60)
+        capture(app, "Native chat sheet at medium height")
+        dragChatGrabber(app, to: 0.08)
+        XCTAssertGreaterThan(app.scrollViews["recipeChatMessages"].frame.height, largeHeight - 30)
+        dragChatGrabber(app, to: 0.98)
+        XCTAssertTrue(launcher.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["closeRecipeChat"].exists)
+        expandRecipeChat(app)
+        XCTAssertEqual(chatInput(app).value as? String, "Find ingredients and a method for naan bread")
         collapseRecipeChat(app)
         app.buttons["Cancel"].tap()
         XCTAssertTrue(app.buttons["editRecipe"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Naan bread"].exists)
     }
 
-    func testRecipeChatStaysOpenAcrossEditorsAndProtectsManualChanges() {
+    func testRecipeChatRetainsSessionAcrossEditorsAndProtectsManualChanges() {
         let app = launchRecipeChatFixture()
-        app.buttons["toggleRecipeChat"].tap()
+        collapseRecipeChat(app)
         app.buttons["editIngredients"].tap()
         XCTAssertTrue(app.buttons["addIngredient"].waitForExistence(timeout: 5))
-        XCTAssertTrue(chatInput(app).isHittable)
-        expandRecipeChat(app)
+        XCTAssertTrue(app.buttons["openRecipeChat"].isHittable)
         app.buttons["addIngredient"].tap()
         XCTAssertTrue(app.navigationBars["Add Ingredient"].waitForExistence(timeout: 5))
+        expandRecipeChat(app)
         XCTAssertTrue(app.buttons["reviewRecipeAIEdit"].isHittable)
-        capture(app, "Ask AI alongside ingredient editor")
+        capture(app, "Chat preserves unfinished ingredient edits")
         app.buttons["reviewRecipeAIEdit"].tap()
         XCTAssertTrue(app.buttons["applyRecipeAIPreview"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["applyRecipeAIPreview"].isEnabled)
         XCTAssertTrue(app.staticTexts["recipeAIPreviewBlocker"].label.contains("Finish your ingredient edit"))
         app.buttons["closeRecipeAIPreview"].tap()
+        collapseRecipeChat(app)
         let name = app.textFields["ingredientName"]
         let field = name.exists ? name : app.textViews["ingredientName"]
         field.tap(); field.typeText("Manual garnish")
         app.buttons["saveIngredient"].tap()
         XCTAssertTrue(app.buttons["addIngredient"].waitForExistence(timeout: 5))
+        expandRecipeChat(app)
         app.buttons["reviewRecipeAIEdit"].tap()
         XCTAssertTrue(app.buttons["applyRecipeAIPreview"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["applyRecipeAIPreview"].isEnabled)
         XCTAssertTrue(app.staticTexts["recipeAIPreviewBlocker"].label.contains("Your recipe has changed"))
         capture(app, "Preview protects newer manual edits")
         app.buttons["closeRecipeAIPreview"].tap()
-        app.buttons["toggleRecipeChat"].tap()
+        collapseRecipeChat(app)
         app.navigationBars.buttons.element(boundBy: 0).tap()
         app.buttons["editMethod"].tap()
         XCTAssertTrue(app.buttons["addMethodStep"].waitForExistence(timeout: 5))
         app.buttons["addMethodStep"].tap()
         XCTAssertTrue(app.navigationBars["Add Step"].waitForExistence(timeout: 5))
-        XCTAssertTrue(chatInput(app).isHittable)
+        XCTAssertTrue(app.buttons["openRecipeChat"].isHittable)
         app.buttons["Cancel"].tap()
         app.navigationBars.buttons.element(boundBy: 0).tap()
         collapseRecipeChat(app)
@@ -112,7 +126,7 @@ import XCTest
 
     func testRecipeChatPreviewShowsRemovalsAndAppliesAndUndoesInPlace() {
         let app = launchRecipeChatFixture()
-        app.buttons["toggleRecipeChat"].tap()
+        collapseRecipeChat(app)
         app.buttons["editIngredients"].tap()
         XCTAssertTrue(app.buttons["addIngredient"].waitForExistence(timeout: 5))
         expandRecipeChat(app)
@@ -133,9 +147,12 @@ import XCTest
         capture(app, "Clean proposed recipe preview")
         app.buttons["applyRecipeAIPreview"].tap()
         XCTAssertTrue(app.buttons["undoRecipeAIEdit"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["750 g chicken breast"].exists)
         XCTAssertFalse(app.buttons["reviewRecipeAIEdit"].exists)
+        collapseRecipeChat(app)
+        XCTAssertTrue(app.staticTexts["750 g chicken breast"].exists)
+        expandRecipeChat(app)
         app.buttons["undoRecipeAIEdit"].tap()
+        collapseRecipeChat(app)
         XCTAssertTrue(app.staticTexts["500 g chicken breast"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["2 Lime wedges"].exists)
         app.navigationBars.buttons.element(boundBy: 0).tap()
@@ -157,8 +174,11 @@ import XCTest
     }
 
     private func collapseRecipeChat(_ app: XCUIApplication) {
-        let bar = app.buttons["toggleRecipeChat"]
-        if bar.exists { bar.tap() }
+        let close = app.buttons["closeRecipeChat"]
+        if close.exists {
+            close.tap()
+            XCTAssertTrue(app.buttons["openRecipeChat"].waitForExistence(timeout: 5))
+        }
     }
 
     private func chatInput(_ app: XCUIApplication) -> XCUIElement {
@@ -167,17 +187,23 @@ import XCTest
     }
 
     private func expandRecipeChat(_ app: XCUIApplication) {
-        XCTAssertTrue(chatInput(app).waitForExistence(timeout: 5))
-        if !app.buttons["toggleRecipeChat"].exists {
-            chatInput(app).tap()
-            XCTAssertTrue(app.buttons["toggleRecipeChat"].waitForExistence(timeout: 5))
-            XCTAssertTrue(chatInput(app).isHittable, app.debugDescription)
-            if app.keyboards.firstMatch.exists {
-                XCTAssertLessThanOrEqual(chatInput(app).frame.maxY, app.keyboards.firstMatch.frame.minY + 1)
-            }
-            app.scrollViews["recipeChatMessages"].swipeDown()
-            app.scrollViews["recipeChatMessages"].swipeUp()
+        if !app.buttons["closeRecipeChat"].exists {
+            let launcher = app.buttons["openRecipeChat"]
+            XCTAssertTrue(launcher.waitForExistence(timeout: 5))
+            launcher.tap()
         }
+        XCTAssertTrue(app.buttons["closeRecipeChat"].waitForExistence(timeout: 5))
+        XCTAssertTrue(chatInput(app).isHittable, app.debugDescription)
+    }
+
+    private func dragChatGrabber(_ app: XCUIApplication, to screenFraction: CGFloat) {
+        let grabber = app.descendants(matching: .any).matching(identifier: "Grabber").firstMatch
+        let start = grabber.exists
+            ? grabber.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            : app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(
+                dx: app.frame.midX, dy: app.buttons["closeRecipeChat"].frame.minY - 14))
+        start.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: screenFraction)),
+                    withVelocity: .slow, thenHoldForDuration: 0.2)
     }
 
     func testDiscoveryLoadingCanBeCancelledAndKeepsThePrompt() {
@@ -186,12 +212,12 @@ import XCTest
         app.launch()
         XCTAssertTrue(app.buttons["openRecipeDiscovery"].waitForExistence(timeout: 15))
         app.buttons["openRecipeDiscovery"].tap()
-        capture(app, "Warm kitchen craving input")
+        capture(app, "Native craving form")
         app.buttons["A cosy one-pot dinner"].tap()
         app.buttons["findDiscoveryRecipes"].tap()
-        // The cooking animation keeps cancellation available throughout the search.
+        // Native progress keeps cancellation available throughout the search.
         XCTAssertTrue(app.buttons["cancelDiscoverySearch"].waitForExistence(timeout: 5))
-        capture(app, "Discovery searching with stirring pot and steam")
+        capture(app, "Native recipe search progress")
         app.buttons["cancelDiscoverySearch"].tap()
         XCTAssertTrue(app.buttons["findDiscoveryRecipes"].waitForExistence(timeout: 5))
         let field = app.textFields["discoveryPrompt"]

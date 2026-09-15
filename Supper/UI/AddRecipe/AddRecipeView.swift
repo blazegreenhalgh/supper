@@ -13,8 +13,7 @@ struct AddRecipeView: View {
     @State private var tagsText: String
     @State private var showingURLImport = false
     @State private var showingAssistant = false
-    @State private var chatExpanded = false
-    @State private var chatHeight: CGFloat = 56
+    @State private var showingChat = false
     @State private var showingCover = false
     @StateObject private var recipeChat = RecipeChatSession()
     @State private var errorMessage: String?
@@ -29,18 +28,23 @@ struct AddRecipeView: View {
         _tagsText = State(initialValue: recipe?.tags.joined(separator: ", ") ?? "")
     }
     var body: some View {
-        GeometryReader { geometry in
-            editor
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    // The inset follows the keyboard and reserves scroll space.
-                    // Only the chat has a material; there is no filled footer.
-                    RecipeEditorChatView(draft: assistantDraft, session: recipeChat, expanded: $chatExpanded)
-                        .frame(height: chatExpanded ? min(380, max(180, geometry.size.height * 0.48)) : 56)
-                        .frame(maxWidth: chatExpanded ? 680 : 420)
-                        .padding(.horizontal, chatExpanded ? 12 : 24)
-                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chatHeight = $0 }
+        editor
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Button { showingChat = true } label: {
+                    Text(recipeChat.input.isEmpty ? "Ask about this recipe…" : recipeChat.input)
+                        .font(.body).foregroundStyle(.secondary).lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20).frame(minHeight: 56)
                 }
-        }
+                .buttonStyle(.plain).supperGlassSurface()
+                .frame(maxWidth: 420).padding(.horizontal, 24).padding(.bottom, 8)
+                .accessibilityLabel("Ask about this recipe")
+                .accessibilityHint("Opens recipe chat")
+                .accessibilityIdentifier("openRecipeChat")
+            }
+            .sheet(isPresented: $showingChat) {
+                RecipeEditorChatView(draft: assistantDraft, session: recipeChat)
+            }
         .onAppear {
             if householdID == nil { householdID = store.activeHouseholdID }
             #if DEBUG
@@ -126,7 +130,7 @@ struct AddRecipeView: View {
                     TextField("Website URL (optional)", text: $urlText).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                 }
             }
-            .contentMargins(.bottom, chatHeight + 20, for: .scrollContent)
+            .contentMargins(.bottom, 84, for: .scrollContent)
             .scrollContentBackground(.hidden).background(SupperStyle.canvas)
             .navigationTitle(original == nil ? "New Recipe" : "Edit Recipe").navigationBarTitleDisplayMode(.inline)
             .toolbar {

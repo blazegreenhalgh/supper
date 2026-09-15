@@ -21,7 +21,7 @@ final class RecipeDiscoveryModel: ObservableObject {
         householdID = store.activeHouseholdID
         let text = prompt, mode = mode
         let existing = Set(store.recipes.map(RecipeDiscoveryReview.key))
-        busy = true; error = nil; progress = "Setting the table…"
+        busy = true; error = nil; progress = "Searching for recipes…"
         task = Task {
             defer { if requestID == token { busy = false; task = nil } }
             do {
@@ -109,11 +109,8 @@ struct RecipeDiscoveryView: View {
                 else if model.hasResults { results }
                 else { requestForm }
             }
-            .background {
-                SupperStyle.canvas
-                if !model.hasResults || model.busy { DiscoveryAtmosphere() }
-            }
-            .navigationTitle(model.hasResults && !model.busy ? "Fresh ideas" : "")
+            .background(SupperStyle.canvas)
+            .navigationTitle(model.hasResults && !model.busy ? "Recipes to try" : "Find Recipes")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -127,7 +124,7 @@ struct RecipeDiscoveryView: View {
                     }
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu("Discovery options", systemImage: "ellipsis") {
-                            Button("New request", systemImage: "sparkles") {
+                            Button("New request", systemImage: "magnifyingglass") {
                                 if model.review.pending.isEmpty { model.startOver() } else { showingStartOver = true }
                             }
                             Button("Undo last discard", systemImage: "arrow.uturn.backward") { model.undoDiscard() }
@@ -159,70 +156,87 @@ struct RecipeDiscoveryView: View {
     }
 
     private var requestForm: some View {
-        GeometryReader { geometry in
-            ScrollView {
-                VStack(spacing: 24) {
-                    DiscoveryKitchen(searching: false).frame(width: 180, height: 145)
-                    Text("What are you\ncraving?")
-                        .font(.system(.largeTitle, design: .serif, weight: .semibold)).multilineTextAlignment(.center)
-                    VStack(spacing: 16) {
-                        HStack(alignment: .center, spacing: 12) {
-                            TextField("A dish or a mood…", text: $model.prompt, axis: .vertical)
-                                .lineLimit(1...4).font(.title3).multilineTextAlignment(.center)
-                                .focused($promptFocused).accessibilityIdentifier("discoveryPrompt")
-                                .accessibilityLabel("What are you craving?")
-                            Button { promptFocused = false; model.search(in: store) } label: {
-                                Image(systemName: "arrow.up").font(.headline).frame(minWidth: 24, minHeight: 28)
-                            }.buttonStyle(.borderedProminent).tint(KitchenPalette.clay).buttonBorderShape(.circle).controlSize(.regular)
-                                .accessibilityLabel("Find recipes").accessibilityIdentifier("findDiscoveryRecipes")
-                                .disabled(model.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.prompt.count > 600 || !canSearch)
-                        }
-                        .padding(14).padding(.leading, 6).frame(minHeight: 84)
-                        .supperGlassPanel()
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 28)
-                                .strokeBorder(KitchenPalette.honey.opacity(0.25), lineWidth: 1)
-                                .allowsHitTesting(false)
-                        }
-                        if model.prompt.count > 600 { Text("600 characters max.").font(.caption).foregroundStyle(.red) }
-                        ViewThatFits(in: .horizontal) {
-                            HStack(spacing: 10) { inspiration }
-                            VStack(spacing: 10) { inspiration }
-                        }
-                    }
-                    if !canSearch {
-                        NavigationLink("Set up OpenAI", destination: AISettingsView()).font(.subheadline)
-                    }
+        Form {
+            Section {
+                Text("What are you craving?")
+                    .font(.largeTitle.weight(.bold))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Describe a dish, the ingredients you have, or what sounds good.")
+                    .font(.body).foregroundStyle(.secondary)
+            }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+
+            Section {
+                TextField("Something with chicken, ready in 30 minutes…", text: $model.prompt, axis: .vertical)
+                    .lineLimit(3...8).focused($promptFocused)
+                    .accessibilityIdentifier("discoveryPrompt")
+                    .accessibilityLabel("What are you craving?")
+            } footer: {
+                if model.prompt.count > 600 {
+                    Text("Keep your request under 600 characters.").foregroundStyle(.red)
+                } else {
+                    Text("Published recipes from the web. Review them before adding them to your library.")
                 }
-                .padding(.horizontal, 24).padding(.vertical, 28)
-                .frame(maxWidth: 600).frame(maxWidth: .infinity)
-                .frame(minHeight: geometry.size.height)
-            }.scrollDismissesKeyboard(.interactively).accessibilityIdentifier("discoveryRequest")
+            }
+
+            Section("Try an idea") {
+                inspiration
+            }
+
+            if !canSearch {
+                Section {
+                    NavigationLink("Set up OpenAI", destination: AISettingsView())
+                } footer: {
+                    Text("Connect your account to find recipes.")
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.interactively)
+        .accessibilityIdentifier("discoveryRequest")
+        .safeAreaInset(edge: .bottom) {
+            Button {
+                promptFocused = false
+                model.search(in: store)
+            } label: {
+                Label("Find recipes", systemImage: "magnifyingglass")
+                    .frame(maxWidth: .infinity)
+            }
+            .supperGlassButton(prominent: true).controlSize(.large)
+            .disabled(model.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.prompt.count > 600 || !canSearch)
+            .accessibilityIdentifier("findDiscoveryRecipes")
+            .padding(.horizontal, 20).padding(.vertical, 12)
         }
     }
 
     private var inspiration: some View {
-        ForEach(Array(zip(["Cosy", "Quick", "Fresh"], ["A cosy one-pot dinner", "Quick chicken with a bit of spice", "Something fresh and vegetarian"])), id: \.0) { label, idea in
-            Button { model.prompt = idea; promptFocused = false } label: { Text(label).font(.subheadline) }
-                .supperGlassButton().accessibilityLabel(idea)
+        ForEach(["A cosy one-pot dinner", "Quick chicken with a bit of spice", "Something fresh and vegetarian"], id: \.self) { idea in
+            Button { model.prompt = idea; promptFocused = false } label: {
+                HStack(spacing: 12) {
+                    Text(idea).frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: "arrow.up.left").font(.subheadline).foregroundStyle(.secondary)
+                }.foregroundStyle(.primary)
+            }
         }
     }
 
     private var loading: some View {
-        VStack(spacing: 24) {
-            DiscoveryKitchen(searching: true).frame(width: 280, height: 245)
-            Text("Finding something\ngood.").font(.system(.largeTitle, design: .serif, weight: .semibold)).multilineTextAlignment(.center)
-            Text(loadingLabel).font(.subheadline).foregroundStyle(.secondary)
-                .accessibilityIdentifier("discoveryProgress").accessibilityValue(model.progress)
-            Button("Cancel") { model.cancel() }.supperGlassButton().accessibilityIdentifier("cancelDiscoverySearch")
-        }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var loadingLabel: String {
-        if model.progress.contains("photos") { return "Adding the finishing touches…" }
-        if model.progress.contains("Checking") { return "Picking your matches…" }
-        if model.progress.contains("Reading") { return "Reading the recipes…" }
-        return "Searching the web…"
+        VStack(spacing: 20) {
+            ProgressView().controlSize(.large).tint(.secondary)
+                .accessibilityLabel("Finding recipes")
+            VStack(spacing: 8) {
+                Text("Finding recipes").font(.title2.weight(.semibold))
+                Text(model.progress).font(.subheadline).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .contentTransition(.opacity)
+                    .animation(reduceMotion ? nil : .default, value: model.progress)
+                    .accessibilityIdentifier("discoveryProgress")
+            }
+            Button("Cancel") { model.cancel() }
+                .supperGlassButton().accessibilityIdentifier("cancelDiscoverySearch")
+        }
+        .padding(28).frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var results: some View {
@@ -272,7 +286,7 @@ struct RecipeDiscoveryView: View {
         ContentUnavailableView {
             Label(model.review.keptIDs.isEmpty ? "Not quite your flavour?" : "Good taste.", systemImage: model.review.keptIDs.isEmpty ? "fork.knife" : "checkmark.seal")
         } actions: {
-            Button("Find more ideas", systemImage: "sparkles") { model.startOver() }.supperGlassButton(prominent: true)
+            Button("Find more recipes", systemImage: "magnifyingglass") { model.startOver() }.supperGlassButton(prominent: true)
             if !model.review.discardedIDs.isEmpty { Button("Undo last discard", systemImage: "arrow.uturn.backward") { model.undoDiscard() } }
         }
     }
@@ -283,100 +297,6 @@ struct RecipeDiscoveryView: View {
     }
     private func discard(_ id: UUID) {
         withAnimation(reduceMotion ? nil : .snappy) { model.discard(id) }
-    }
-}
-
-/// Warm window light and a little stovetop scene, separate from controls and layout.
-private enum KitchenPalette {
-    static let clay = Color(red: 0.68, green: 0.32, blue: 0.21)
-    static let honey = Color(red: 0.85, green: 0.62, blue: 0.30)
-    static let olive = Color(red: 0.40, green: 0.47, blue: 0.28)
-    static let wood = Color(red: 0.49, green: 0.32, blue: 0.19)
-}
-
-private struct DiscoveryAtmosphere: View {
-    @Environment(\.colorScheme) private var colorScheme
-    var body: some View {
-        RadialGradient(colors: [KitchenPalette.honey.opacity(colorScheme == .dark ? 0.12 : 0.13), .clear],
-                       center: .init(x: 0.8, y: 0.3), startRadius: 10, endRadius: 440)
-            .ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true)
-    }
-}
-
-private struct DiscoveryKitchen: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.scenePhase) private var scenePhase
-    let searching: Bool
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion || scenePhase != .active)) { timeline in
-            Canvas { context, size in
-                let t = reduceMotion ? 0.8 : timeline.date.timeIntervalSinceReferenceDate
-                // Work in a small, fixed drawing space so every element scales together.
-                let scale = min(size.width / 240, size.height / 210)
-                context.translateBy(x: (size.width - 240 * scale) / 2, y: (size.height - 210 * scale) / 2)
-                context.scaleBy(x: scale, y: scale)
-
-                context.fill(Path(ellipseIn: CGRect(x: 45, y: 176, width: 150, height: 13)),
-                             with: .color(KitchenPalette.wood.opacity(0.09)))
-                // Steam rises, curls and fades without a jump at the loop boundary.
-                for index in 0..<3 {
-                    let phase = (t / (searching ? 2.8 : 4.5) + Double(index) / 3).truncatingRemainder(dividingBy: 1)
-                    let x = 91.0 + Double(index) * 27
-                    let y = 96 - phase * 66
-                    var steam = Path()
-                    steam.move(to: CGPoint(x: x, y: y + 18))
-                    steam.addCurve(to: CGPoint(x: x + 5 * sin(phase * .pi * 2), y: y - 12),
-                                   control1: CGPoint(x: x - 12, y: y + 6), control2: CGPoint(x: x + 13, y: y))
-                    context.stroke(steam, with: .color(KitchenPalette.wood.opacity(sin(phase * .pi) * 0.36)),
-                                   style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                }
-
-                // Enamel casserole, handles and a rounded base.
-                for x in [43.0, 174.0] {
-                    context.stroke(Path(roundedRect: CGRect(x: x, y: 119, width: 23, height: 18), cornerRadius: 8),
-                                   with: .color(KitchenPalette.clay), lineWidth: 6)
-                }
-                var pot = Path()
-                pot.move(to: CGPoint(x: 60, y: 112))
-                pot.addLine(to: CGPoint(x: 66, y: 153))
-                pot.addQuadCurve(to: CGPoint(x: 90, y: 175), control: CGPoint(x: 69, y: 175))
-                pot.addLine(to: CGPoint(x: 150, y: 175))
-                pot.addQuadCurve(to: CGPoint(x: 174, y: 153), control: CGPoint(x: 171, y: 175))
-                pot.addLine(to: CGPoint(x: 180, y: 112))
-                pot.closeSubpath()
-                context.fill(pot, with: .linearGradient(Gradient(colors: [KitchenPalette.clay.opacity(0.78), KitchenPalette.clay]),
-                                                       startPoint: CGPoint(x: 65, y: 110), endPoint: CGPoint(x: 175, y: 175)))
-                context.fill(Path(ellipseIn: CGRect(x: 59, y: 99, width: 122, height: 32)), with: .color(KitchenPalette.clay))
-                context.fill(Path(ellipseIn: CGRect(x: 65, y: 103, width: 110, height: 23)), with: .color(KitchenPalette.honey))
-                context.stroke(Path(ellipseIn: CGRect(x: 59, y: 99, width: 122, height: 32)),
-                               with: .color(KitchenPalette.clay.opacity(0.9)), lineWidth: 3)
-
-                // Tiny bubbles and herbs follow the surface of the soup.
-                for index in 0..<5 {
-                    let phase = (t / 1.8 + Double(index) * 0.21).truncatingRemainder(dividingBy: 1)
-                    let x = 83.0 + Double(index) * 18
-                    let y = 111.0 + sin(Double(index) * 2) * 4
-                    let radius = searching ? 1 + phase * 3 : 2
-                    context.stroke(Path(ellipseIn: CGRect(x: x - radius, y: y - radius, width: radius * 2, height: radius * 1.2)),
-                                   with: .color(.white.opacity(searching ? (1 - phase) * 0.65 : 0.3)), lineWidth: 1)
-                    context.fill(Path(ellipseIn: CGRect(x: x + 3, y: y + 5, width: 5, height: 2)),
-                                 with: .color(KitchenPalette.olive))
-                }
-                // The spoon traces an ellipse, visibly stirring rather than spinning.
-                let stirring = searching ? t * 2.2 : 0.5
-                let tip = CGPoint(x: 126 + sin(stirring) * 21, y: 114 + cos(stirring) * 4)
-                let handle = CGPoint(x: 154 + sin(stirring) * 9, y: 62 + cos(stirring) * 3)
-                var spoon = Path()
-                spoon.move(to: handle); spoon.addLine(to: tip)
-                context.stroke(spoon, with: .color(KitchenPalette.wood), style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                context.fill(Path(ellipseIn: CGRect(x: tip.x - 6, y: tip.y - 4, width: 12, height: 8)),
-                             with: .color(KitchenPalette.wood))
-                var shine = Path()
-                shine.move(to: CGPoint(x: 76, y: 139)); shine.addQuadCurve(to: CGPoint(x: 90, y: 163), control: CGPoint(x: 77, y: 160))
-                context.stroke(shine, with: .color(.white.opacity(0.24)), style: StrokeStyle(lineWidth: 3, lineCap: .round))
-            }
-        }.allowsHitTesting(false).accessibilityHidden(true)
     }
 }
 

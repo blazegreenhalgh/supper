@@ -2,7 +2,7 @@
 
 Tap **What are you craving?** on the library screen, or **Find new recipes** in the library/search menu.
 
-- A centred glass input, short inspiration chips and warm kitchen illustration keep entry simple. Loading shows a smoothly stirring spoon, bubbles and rising steam; Reduce Motion shows a still illustration, and motion pauses outside the active scene.
+- The request screen uses Supper’s existing colours and system typography, a native grouped form with a multiline input, and full-width inspiration rows. Find recipes stays reachable above the keyboard. Loading shows a native animated progress indicator and the actual search stage, with cancellation always available.
 - Discovery finds published recipes online using the configured OpenAI API key. It never generates recipes. GPT-5.6 Terra forms the search and selects up to five downloaded recipes; the app imports their structured ingredients, methods and publisher photos.
 - Missing evidence, unsupported pages and requests with no matching recipes produce a retryable error. Source links stay attached.
 - Tap a result to preview and edit its draft. Swipe right to keep or left to discard; buttons and VoiceOver actions offer the same decisions. Undo restores the last discarded draft.

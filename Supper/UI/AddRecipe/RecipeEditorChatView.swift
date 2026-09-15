@@ -215,13 +215,13 @@ struct RecipeChatMessage: Identifiable {
 
 struct RecipeEditorChatView: View {
     @EnvironmentObject private var store: RecipeStore
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var draft: RecipeDraft
     @ObservedObject var session: RecipeChatSession
-    @Binding var expanded: Bool
     @FocusState private var inputFocused: Bool
-    @State private var collapseOffset: CGFloat = 0
-    @GestureState private var draggingHandle = false
+    @State private var detent: PresentationDetent = .large
+    @State private var sendButtonHeight: CGFloat = 50
     @State private var reviewing: RecipeAssistantProposal?
     @State private var reviewingPhoto: RecipePhotoProposal?
     @State private var showingPhotoTools = false
@@ -229,57 +229,36 @@ struct RecipeEditorChatView: View {
     @State private var showingAISettings = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            if expanded {
-            grabber
-            if !session.photos.isEmpty || session.pending != nil || !session.undoStack.isEmpty {
-                reviewActions.fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .trailing).padding(.horizontal, 16)
-            }
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 22) {
-                        if session.messages.isEmpty || !aiSettings.isConfigured { introduction }
-                        ForEach(session.messages) { message in messageView(message) }
-                        if session.busy {
-                            ProgressView(session.progress).font(.subheadline)
-                                .accessibilityIdentifier("recipeChatProgress")
-                        }
-                        if let error = session.error {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(error).font(.callout).foregroundStyle(.secondary)
-                                if let request = session.retryRequest, !session.busy {
-                                    Button("Try again", systemImage: "arrow.clockwise") {
-                                        session.input = request; send()
-                                    }
-                                }
-                            }.accessibilityIdentifier("recipeChatError")
-                        }
-                        if let proposal = session.pending { proposalCard(proposal) }
-                        if let proposal = session.pendingCollections { collectionCard(proposal) }
-                        if session.choosingPhoto || session.needsPhotoUpload { photoChoices }
-                        if !session.photos.isEmpty { photoCards }
-                        Color.clear.frame(height: 1).id("chatBottom")
-                    }.padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity)
+        NavigationStack {
+            conversation
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    composer
                 }
-                .accessibilityIdentifier("recipeChatMessages")
-                .scrollDismissesKeyboard(.interactively)
-                .onChange(of: session.messages.count) { _, _ in proxy.scrollTo("chatBottom", anchor: .bottom) }
-                .onChange(of: session.busy) { _, _ in proxy.scrollTo("chatBottom", anchor: .bottom) }
-                .onAppear { proxy.scrollTo("chatBottom", anchor: .bottom) }
-            }
-            }
-            composer.fixedSize(horizontal: false, vertical: true).layoutPriority(1)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) { reviewActions }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Close chat", systemImage: "xmark") { dismiss() }
+                            .labelStyle(.iconOnly).tint(.primary)
+                            .accessibilityIdentifier("closeRecipeChat")
+                    }
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Hide keyboard", systemImage: "keyboard.chevron.compact.down") {
+                            inputFocused = false
+                        }.accessibilityIdentifier("hideRecipeChatKeyboard")
+                    }
+                }
+                .navigationBarTitleDisplayMode(.inline)
         }
-        .supperGlassPanel()
-        .offset(y: collapseOffset)
+        // Let the presentation controller own the surface, grabber, keyboard
+        // avoidance and interactive transitions between both resting heights.
+        .presentationDetents([.medium, .large], selection: $detent)
+        .presentationDragIndicator(.visible)
+        .presentationContentInteraction(.scrolls)
         .onChange(of: inputFocused) { _, focused in
-            if focused && !expanded { withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) { expanded = true } }
+            if focused { withAnimation(reduceMotion ? nil : .default) { detent = .large } }
         }
-        .onChange(of: expanded) { _, value in if !value { inputFocused = false } }
-        .onChange(of: draggingHandle) { _, active in
-            if !active { withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { collapseOffset = 0 } }
-        }
+        .task { inputFocused = session.messages.isEmpty || !session.input.isEmpty }
         .sheet(isPresented: $showingAISettings) {
             NavigationStack { AISettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingAISettings = false } } } }
         }
@@ -296,55 +275,81 @@ struct RecipeEditorChatView: View {
         .sheet(isPresented: $showingPhotoTools) { RecipeCoverView(draft: $draft, initialMode: .enhanced, initialRequest: session.photoPreferences) }
     }
 
-    private var grabber: some View {
-        Button(action: collapse) {
-            Capsule().fill(.secondary.opacity(0.4)).frame(width: 36, height: 5)
-                .frame(maxWidth: .infinity).frame(height: 28).contentShape(.rect)
-        }.buttonStyle(.plain).accessibilityLabel("Collapse chat")
-            .accessibilityIdentifier("toggleRecipeChat")
-            .simultaneousGesture(DragGesture(minimumDistance: 8, coordinateSpace: .global)
-                .updating($draggingHandle) { _, active, _ in active = true }
-                .onChanged { value in
-                    var transaction = Transaction(animation: nil)
-                    transaction.disablesAnimations = true
-                    withTransaction(transaction) { collapseOffset = max(0, min(value.translation.height, 120)) }
-                }
-                .onEnded { value in
-                    if value.translation.height > 20 || value.predictedEndTranslation.height > 60 { collapse() }
-                })
-    }
-
-    private func collapse() {
-        inputFocused = false
-        withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) { expanded = false; collapseOffset = 0 }
+    private var conversation: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 22) {
+                    if session.messages.isEmpty || !aiSettings.isConfigured { introduction }
+                    ForEach(session.messages) { message in messageView(message) }
+                    if session.busy {
+                        ProgressView(session.progress).font(.subheadline)
+                            .accessibilityIdentifier("recipeChatProgress")
+                    }
+                    if let error = session.error {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(error).font(.callout).foregroundStyle(.secondary)
+                            if let request = session.retryRequest, !session.busy {
+                                Button("Try again", systemImage: "arrow.clockwise") {
+                                    session.input = request; send()
+                                }
+                            }
+                        }.accessibilityIdentifier("recipeChatError")
+                    }
+                    if let proposal = session.pending { proposalCard(proposal) }
+                    if let proposal = session.pendingCollections { collectionCard(proposal) }
+                    if session.choosingPhoto || session.needsPhotoUpload { photoChoices }
+                    if !session.photos.isEmpty { photoCards }
+                    Color.clear.frame(height: 1).id("chatBottom")
+                }.padding(20).frame(maxWidth: 680).frame(maxWidth: .infinity)
+            }
+            .accessibilityIdentifier("recipeChatMessages")
+            .scrollDismissesKeyboard(.interactively)
+            .defaultScrollAnchor(.bottom, for: .sizeChanges)
+            .onChange(of: session.messages.count) { _, _ in proxy.scrollTo("chatBottom", anchor: .bottom) }
+            .onChange(of: session.busy) { _, _ in proxy.scrollTo("chatBottom", anchor: .bottom) }
+            .onAppear { if !session.messages.isEmpty { proxy.scrollTo("chatBottom", anchor: .bottom) } }
+        }
     }
 
     private var reviewActions: some View {
         HStack(spacing: 8) {
             if let photo = session.photos.first {
                 Button("Preview") { inputFocused = false; reviewingPhoto = photo }
-                    .supperGlassButton().accessibilityIdentifier("reviewChatPhoto")
+                    .accessibilityIdentifier("reviewChatPhoto")
             } else if let proposal = session.pending {
                 Button("Preview") { inputFocused = false; reviewing = proposal }
-                    .supperGlassButton().accessibilityIdentifier("reviewRecipeAIEdit")
+                    .accessibilityIdentifier("reviewRecipeAIEdit")
             } else if let last = session.undoStack.last, last.after == draft, !session.busy {
                 Button("Undo") { session.undo(in: &draft) }
-                    .supperGlassButton().disabled(session.editingField != nil)
+                    .disabled(session.editingField != nil)
                     .accessibilityLabel("Undo last AI edit").accessibilityIdentifier("undoRecipeAIEdit")
             }
         }
     }
 
     private var introduction: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
             if aiSettings.isConfigured {
                 if session.messages.isEmpty {
-                    ForEach(suggestions, id: \.self) { text in
-                        Button(text) { session.input = text; inputFocused = true }
-                            .font(.subheadline).buttonStyle(.bordered).tint(.primary)
+                    Text("A little help with your recipe")
+                        .font(.title3.weight(.semibold))
+                    Text("Find a method, adjust part of a recipe or organise it into sections.")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                    VStack(spacing: 0) {
+                        ForEach(suggestions, id: \.self) { text in
+                            Button { session.input = text; inputFocused = true } label: {
+                                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                    Text(text).multilineTextAlignment(.leading)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    Image(systemName: "arrow.up.left").foregroundStyle(.secondary)
+                                }.font(.subheadline).padding(.vertical, 14)
+                            }.buttonStyle(.plain)
+                            if text != suggestions.last { Divider() }
+                        }
                     }
                 }
             } else {
+                Text("Get help with this recipe").font(.title3.weight(.semibold))
                 Button("Set up OpenAI", systemImage: "key") { showingAISettings = true }
             }
         }
@@ -403,39 +408,52 @@ struct RecipeEditorChatView: View {
 
     private var composer: some View {
         VStack(spacing: 8) {
-            if expanded && session.input.count > 1200 { Text("Keep your request under 1,200 characters.").font(.caption).foregroundStyle(.secondary) }
+            if session.input.count > 1200 {
+                Text("Keep your request under 1,200 characters.").font(.caption).foregroundStyle(.secondary)
+            }
             HStack(alignment: .bottom, spacing: 10) {
-                if expanded {
                 Menu("Photo options", systemImage: "photo.badge.plus") {
                     Button("Find a photo online") { photoRequest(.findPhoto) }
                     Button("Generate a cover") { photoRequest(.generatePhoto) }
                     Button("Polish my food photo") { inputFocused = false; showingPhotoTools = true }
-                }.labelStyle(.iconOnly).tint(.primary).frame(width: 36, height: 44)
-                    .disabled(session.busy).accessibilityIdentifier("chatPhotoOptions")
                 }
+                .labelStyle(.iconOnly).supperGlassButton().tint(.primary)
+                .controlSize(.large).buttonBorderShape(.circle)
+                .disabled(session.busy).accessibilityIdentifier("chatPhotoOptions")
+
                 TextField(session.pending?.base == draft ? "Refine this suggestion…" : "Ask about this recipe…", text: $session.input, axis: .vertical)
-                    .lineLimit(expanded ? 1...3 : 1...1).fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 16).padding(.vertical, 10).frame(minHeight: 44)
-                    .background(expanded ? Color.primary.opacity(0.05) : .clear, in: .capsule).focused($inputFocused)
+                    .font(.body).lineLimit(1...6)
+                    .padding(.horizontal, 16).padding(.vertical, 8)
+                    .frame(minHeight: sendButtonHeight)
+                    .background(Color(uiColor: .tertiarySystemFill), in: .rect(cornerRadius: sendButtonHeight / 2))
+                    .focused($inputFocused)
                     .accessibilityIdentifier("recipeChatInput")
                     .accessibilityLabel("Ask about this recipe")
-                    .accessibilityHint(expanded ? "" : "Opens recipe chat")
-                if expanded {
-                if session.busy {
-                    Button("Stop", systemImage: "stop.fill") { session.stop() }
-                        .labelStyle(.iconOnly).supperGlassButton().controlSize(.regular).buttonBorderShape(.circle).frame(width: 44, height: 44)
-                } else {
-                    Button("Send", systemImage: "arrow.up") { send() }
-                        .labelStyle(.iconOnly).supperGlassButton(prominent: true).controlSize(.regular).buttonBorderShape(.circle).frame(width: 44, height: 44)
-                        .disabled(!aiSettings.isConfigured || session.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.input.count > 1200)
-                        .accessibilityIdentifier("sendRecipeChat")
+
+                // Measure the native button itself. An outer frame only resizes
+                // its hit area, leaving the visible glass smaller than the field.
+                Group {
+                    if session.busy {
+                        Button("Stop", systemImage: "stop.fill") { session.stop() }
+                            .supperGlassButton().accessibilityIdentifier("stopRecipeChat")
+                    } else {
+                        Button("Send", systemImage: "arrow.up") { send() }
+                            .supperGlassButton(prominent: true)
+                            .disabled(!aiSettings.isConfigured || session.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.input.count > 1200)
+                            .accessibilityIdentifier("sendRecipeChat")
+                    }
                 }
-                }
+                .labelStyle(.iconOnly).controlSize(.large).buttonBorderShape(.circle)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { sendButtonHeight = $0 }
             }
-        }.padding(.horizontal, expanded ? 12 : 4).padding(.vertical, 6)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .frame(maxWidth: 680).frame(maxWidth: .infinity)
     }
 
-    private func send() { inputFocused = false; session.send(draft: draft, collections: store.collections, householdID: store.activeHouseholdID) }
+    private func send() {
+        session.send(draft: draft, collections: store.collections, householdID: store.activeHouseholdID)
+    }
 
     private func collectionCard(_ proposal: RecipeCollectionProposal) -> some View {
         VStack(alignment: .leading, spacing: 12) {
