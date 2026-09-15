@@ -19,7 +19,15 @@ struct RecipeFilterChips: View {
                 .transition(.opacity)
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: SupperStyle.chipSpacing) {
+                    Menu {
+                        Section("Match all selected collections") {
+                            ForEach(store.collections) { collection in
+                                Toggle(collection.name, isOn: Binding(get: { filter.collectionIDs.contains(collection.id) }, set: { on in if on { filter.collectionIDs.insert(collection.id) } else { filter.collectionIDs.remove(collection.id) } }))
+                            }
+                        }
+                        Button("Clear collections") { filter.collectionIDs = [] }
+                    } label: { chipLabel(filter.collectionIDs.isEmpty ? "Collections" : "Collections · \(filter.collectionIDs.count)", systemImage: "folder") }.filterChip(active: !filter.collectionIDs.isEmpty, identifier: "collectionsFilter").disabled(store.collections.isEmpty)
                     Menu {
                         Picker("Maximum duration", selection: $filter.maximumMinutes) {
                             Text("Any duration").tag(Optional<Int>.none)
@@ -34,18 +42,11 @@ struct RecipeFilterChips: View {
                         }
                         Button("Clear tags") { filter.tags = [] }
                     } label: { chipLabel(filter.tags.isEmpty ? "Tags" : "Tags · \(filter.tags.count)", systemImage: "tag") }.filterChip(active: !filter.tags.isEmpty, identifier: "tagsFilter").disabled(allTags.isEmpty)
-                    Menu {
-                        Section("Match all selected collections") {
-                            ForEach(store.collections) { collection in
-                                Toggle(collection.name, isOn: Binding(get: { filter.collectionIDs.contains(collection.id) }, set: { on in if on { filter.collectionIDs.insert(collection.id) } else { filter.collectionIDs.remove(collection.id) } }))
-                            }
-                        }
-                        Button("Clear collections") { filter.collectionIDs = [] }
-                    } label: { chipLabel(filter.collectionIDs.isEmpty ? "Collections" : "Collections · \(filter.collectionIDs.count)", systemImage: "folder") }.filterChip(active: !filter.collectionIDs.isEmpty, identifier: "collectionsFilter").disabled(store.collections.isEmpty)
+
                     Menu {
                         Picker("Reactions", selection: $filter.reaction) { ForEach(RecipeFilter.ReactionFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
                     } label: { chipLabel(filter.reaction == .any ? "Reactions" : filter.reaction.rawValue, systemImage: "face.smiling") }.filterChip(active: filter.reaction != .any, identifier: "reactionFilter")
-                }.padding(.vertical, 6)
+                }
             }
             // Inset the content, not the viewport: chips travel to the screen edge.
             .contentMargins(.leading, filter.isActive ? 0 : 20, for: .scrollContent)

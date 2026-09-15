@@ -1,6 +1,7 @@
 import SwiftUI
 
 enum SupperStyle {
+    static let chipSpacing: CGFloat = 8
     static let canvas = Color("Canvas")
     static let surface = Color("Surface")
     static let subtle = Color("Subtle")
@@ -101,5 +102,12 @@ private struct RecipeZoomDestination: ViewModifier {
 extension View {
     func supperRecipeZoom(sourceID: String, in namespace: Namespace.ID) -> some View {
         modifier(RecipeZoomDestination(sourceID: sourceID, namespace: namespace))
+    }
+}
+
+
+struct SupperToggleStyle: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Toggle(configuration).toggleStyle(.switch).tint(Color(uiColor: .systemBlue))
     }
 }

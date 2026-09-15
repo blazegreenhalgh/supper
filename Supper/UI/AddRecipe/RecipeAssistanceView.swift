@@ -74,10 +74,10 @@ struct GroupRecoveryView: View {
         NavigationStack {
             List {
                 Section {
-                    Text("Review source headings before applying them. Ingredient names, quantities, units and order stay as edited.")
+                    Text("Review source headings before applying them. Ingredient names, quantities and units stay as edited. Ingredients move into their recovered sections.")
                     if loading { ProgressView("Reading source headings…") }
-                    else { Button(loaded ? "Try again" : "Find source groups", action: recover) }
-                    if loaded && proposals.isEmpty { Text("No unambiguous groups found. Add groups manually in the ingredient editor.").foregroundStyle(.secondary) }
+                    else { Button(loaded ? "Try again" : "Find source sections", action: recover) }
+                    if loaded && proposals.isEmpty { Text("No unambiguous sections found. Add sections in the ingredient editor.").foregroundStyle(.secondary) }
                 }
                 ForEach(ingredients.filter { proposals[$0.id] != nil }) { item in
                     Toggle(isOn: Binding(get: { selected.contains(item.id) }, set: { on in
@@ -85,21 +85,25 @@ struct GroupRecoveryView: View {
                     })) {
                         VStack(alignment: .leading) {
                             Text(item.name)
-                            Text("\(item.group.isEmpty ? "No group" : item.group) → \(proposals[item.id] ?? "")").font(.caption).foregroundStyle(.secondary)
+                            Text("\(item.group.isEmpty ? "Main section" : item.group) → \(proposals[item.id] ?? "")").font(.caption).foregroundStyle(.secondary)
                         }
                     }
                 }
             }
-            .navigationTitle("Recover groups").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("Recover sections").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { task?.cancel(); dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Apply") {
-                    for index in ingredients.indices where selected.contains(ingredients[index].id) { ingredients[index].group = proposals[ingredients[index].id] ?? ingredients[index].group }
+                    ingredients = ingredients.map { item in
+                        var item = item
+                        if selected.contains(item.id) { item.group = proposals[item.id] ?? item.group }
+                        return item
+                    }
                     dismiss()
                 }.disabled(selected.isEmpty || loading) }
             }
             .onDisappear { task?.cancel() }
-            .supperError($error, title: "Couldn't recover groups")
+            .supperError($error, title: "Couldn't recover sections")
         }
     }
     private func recover() {

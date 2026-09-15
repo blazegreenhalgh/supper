@@ -178,8 +178,17 @@ public struct RecipeDraft: Hashable, Sendable {
     public var tags: [String]
     public var notes: String
     public var sourceURL: URL?
-    public var ingredients: [Ingredient]
-    public var steps: [RecipeStep]
+    public var ingredientSections: RecipeSectionedContent<Ingredient>
+    public var methodSections: RecipeSectionedContent<RecipeStep>
+    // Flat adapters keep imports, AI review and the existing CloudKit schema compatible.
+    public var ingredients: [Ingredient] {
+        get { ingredientSections.flattened }
+        set { ingredientSections.replaceItems(newValue) }
+    }
+    public var steps: [RecipeStep] {
+        get { methodSections.flattened }
+        set { methodSections.replaceItems(newValue) }
+    }
 
     public init(
         title: String = "",
@@ -199,8 +208,8 @@ public struct RecipeDraft: Hashable, Sendable {
         self.tags = tags
         self.notes = notes
         self.sourceURL = sourceURL
-        self.ingredients = ingredients
-        self.steps = steps
+        self.ingredientSections = RecipeSectionedContent(items: ingredients)
+        self.methodSections = RecipeSectionedContent(items: steps)
     }
 
     public func makeRecipe() -> Recipe {
@@ -239,6 +248,8 @@ extension RecipeDraft {
 }
 
 public struct RecipeCollection: Identifiable, Hashable, Sendable {
+    /// A reserved homepage section, excluded from recipe memberships and filters.
+    public static let allRecipesID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     public var id: UUID
     public var name: String
     public var isOnHome: Bool
@@ -293,4 +304,108 @@ public struct IngredientSection: Identifiable, Sendable {
 public enum SupperError: LocalizedError {
     case invalid(String)
     public var errorDescription: String? { if case .invalid(let message) = self { return message }; return nil }
+}
+
+
+/// Sections own their rows while editing. Only the persistence/import boundary needs
+/// the legacy per-row heading. Section moves therefore always move all their content.
+public protocol RecipeSectionItem: Identifiable, Hashable, Sendable where ID == UUID {
+    var group: String { get set }
+    var order: Int { get set }
+}
+extension Ingredient: RecipeSectionItem {}
+extension RecipeStep: RecipeSectionItem {}
+
+public struct RecipeContentSection<Item: RecipeSectionItem>: Identifiable, Hashable, Sendable {
+    public var title: String
+    public var items: [Item]
+    public var id: String { title }
+}
+
+public struct RecipeSectionedContent<Item: RecipeSectionItem>: Hashable, Sendable {
+    public var sections: [RecipeContentSection<Item>] = []
+
+    public init(items: [Item] = []) { replaceItems(items) }
+
+    public var flattened: [Item] {
+        var rows: [Item] = []
+        for section in sections {
+            for var item in section.items {
+                item.group = section.title
+                item.order = rows.count
+                rows.append(item)
+            }
+        }
+        return rows
+    }
+
+    public mutating func replaceItems(_ items: [Item]) {
+        let previous = sections
+        var rebuilt: [RecipeContentSection<Item>] = []
+        for var item in items {
+            let title = item.group.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let index = rebuilt.firstIndex(where: { $0.title.caseInsensitiveCompare(title) == .orderedSame }) {
+                item.group = rebuilt[index].title
+                rebuilt[index].items.append(item)
+            } else {
+                item.group = title
+                rebuilt.append(.init(title: title, items: [item]))
+            }
+        }
+        // Formatting and source recovery must not remove newly created empty sections.
+        for (index, section) in previous.enumerated() where !rebuilt.contains(where: { $0.title == section.title }) {
+            rebuilt.insert(.init(title: section.title, items: []), at: min(index, rebuilt.count))
+        }
+        sections = rebuilt.isEmpty ? [.init(title: "", items: [])] : rebuilt
+    }
+
+    @discardableResult public mutating func addSection(_ name: String) -> String {
+        let title = name.components(separatedBy: .newlines).joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        if let existing = sections.first(where: { $0.title.caseInsensitiveCompare(title) == .orderedSame }) { return existing.title }
+        sections.append(.init(title: title, items: []))
+        return title
+    }
+
+    public mutating func save(_ item: Item, in title: String) {
+        let destination = addSection(title)
+        if let section = sections.firstIndex(where: { $0.title == destination }),
+           let index = sections[section].items.firstIndex(where: { $0.id == item.id }) {
+            var value = item; value.group = destination
+            sections[section].items[index] = value
+        } else {
+            for index in sections.indices { sections[index].items.removeAll { $0.id == item.id } }
+            var value = item; value.group = destination
+            sections[sections.firstIndex(where: { $0.title == destination })!].items.append(value)
+        }
+    }
+
+    @discardableResult public mutating func moveItem(_ id: UUID, to title: String, before nextID: UUID? = nil) -> Bool {
+        guard id != nextID, sections.contains(where: { $0.title == title }),
+              let item = flattened.first(where: { $0.id == id }),
+              nextID == nil || sections.first(where: { $0.title == title })!.items.contains(where: { $0.id == nextID }) else { return false }
+        for index in sections.indices { sections[index].items.removeAll { $0.id == id } }
+        let index = sections.firstIndex(where: { $0.title == title })!
+        var value = item; value.group = title
+        let insertion = nextID.flatMap { next in sections[index].items.firstIndex(where: { $0.id == next }) } ?? sections[index].items.count
+        sections[index].items.insert(value, at: insertion)
+        return true
+    }
+
+    @discardableResult public mutating func moveSection(_ title: String, before nextTitle: String?) -> Bool {
+        guard title != nextTitle, let index = sections.firstIndex(where: { $0.title == title }),
+              nextTitle == nil || sections.contains(where: { $0.title == nextTitle }) else { return false }
+        let section = sections.remove(at: index)
+        let insertion = nextTitle.flatMap { title in sections.firstIndex(where: { $0.title == title }) } ?? sections.count
+        sections.insert(section, at: insertion)
+        return true
+    }
+
+    @discardableResult public mutating func renameSection(_ title: String, to name: String) -> Bool {
+        let name = name.components(separatedBy: .newlines).joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, let index = sections.firstIndex(where: { $0.title == title }),
+              !sections.contains(where: { $0.title != title && $0.title.caseInsensitiveCompare(name) == .orderedSame }) else { return false }
+        sections[index].title = name
+        for row in sections[index].items.indices { sections[index].items[row].group = name }
+        return true
+    }
 }

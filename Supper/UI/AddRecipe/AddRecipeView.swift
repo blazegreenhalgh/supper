@@ -86,14 +86,14 @@ struct AddRecipeView: View {
                 }
                 Section("Recipe") {
                     NavigationLink {
-                        IngredientListEditor(ingredients: $draft.ingredients, sourceURL: URL(string: urlText)) {
+                        IngredientListEditor(content: $draft.ingredientSections, availableSections: draft.methodSections.sections.map(\.title), sourceURL: URL(string: urlText)) {
                             recipeChat.editingField = $0 ? "ingredient" : nil
                         }
                     } label: {
                         editorLink("Ingredients", systemImage: "carrot", detail: draft.ingredients.isEmpty ? "Add" : "\(draft.ingredients.count) items")
                     }.accessibilityIdentifier("editIngredients")
                     NavigationLink {
-                        MethodListEditor(steps: $draft.steps) {
+                        MethodListEditor(content: $draft.methodSections, availableSections: draft.ingredientSections.sections.map(\.title)) {
                             recipeChat.editingField = $0 ? "step" : nil
                         }
                     } label: {

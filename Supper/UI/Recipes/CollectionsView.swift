@@ -9,25 +9,31 @@ struct CollectionsView: View {
         NavigationStack {
             List {
                 Section {
-                    ForEach(store.collections) { collection in
+                    ForEach(store.collectionSections) { collection in
                         VStack(alignment: .leading, spacing: 10) {
-                            Button { editing = collection } label: { Label(collection.name, systemImage: "folder").font(.headline) }.buttonStyle(.borderless)
-                            Toggle("Show on homepage", isOn: Binding(get: { collection.isOnHome }, set: { on in
-                                var changed = collection; changed.isOnHome = on
-                                do { try store.saveCollection(changed) } catch { self.error = error.localizedDescription }
-                            })).font(.subheadline)
+                            if collection.id == RecipeCollection.allRecipesID {
+                                Label("All recipes", systemImage: "square.grid.2x2").font(.headline)
+                                Text("Always on homepage").font(.subheadline).foregroundStyle(.secondary)
+                            } else {
+                                Button { editing = collection } label: { Label(collection.name, systemImage: "folder").font(.headline) }.buttonStyle(.borderless)
+                                Toggle("Show on homepage", isOn: Binding(get: { collection.isOnHome }, set: { on in
+                                    var changed = collection; changed.isOnHome = on
+                                    do { try store.saveCollection(changed) } catch { self.error = error.localizedDescription }
+                                })).font(.subheadline).tint(Color(uiColor: .systemBlue))
+                            }
                         }.padding(.vertical, 4)
+                            .deleteDisabled(collection.id == RecipeCollection.allRecipesID)
                     }
                     .onDelete { offsets in
-                        let ids = offsets.map { store.collections[$0].id }
+                        let ids = offsets.map { store.collectionSections[$0].id }.filter { $0 != RecipeCollection.allRecipesID }
                         do { for id in ids { try store.deleteCollection(id) } } catch { self.error = error.localizedDescription }
                     }
                     .onMove { offsets, destination in
-                        var ids = store.collections.map(\.id); ids.move(fromOffsets: offsets, toOffset: destination)
+                        var ids = store.collectionSections.map(\.id); ids.move(fromOffsets: offsets, toOffset: destination)
                         do { try store.reorderCollections(ids) } catch { self.error = error.localizedDescription }
                     }
                 } footer: { Text("Tap Edit to reorder homepage sections, or tap a collection to rename it. Hiding a section keeps its collection. Deleting a collection keeps all its recipes.") }
-                Button("New collection", systemImage: "folder.badge.plus") { editing = RecipeCollection(name: "", order: store.collections.count) }
+                Button("New collection", systemImage: "folder.badge.plus") { editing = RecipeCollection(name: "", order: (store.collectionSections.filter { $0.order != Int.max }.map(\.order).max() ?? -1) + 1) }
             }.navigationTitle("Collections").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }; ToolbarItem(placement: .primaryAction) { EditButton() } }
                 .sheet(item: $editing) { CollectionEditorView(collection: $0) }
@@ -62,7 +68,7 @@ struct CollectionMembershipView: View {
     var body: some View {
         NavigationStack {
             List {
-                if store.collections.isEmpty { Text("Tap Edit on the Recipes screen to create a collection.").foregroundStyle(.secondary) }
+                if store.collections.isEmpty { Text("Open Collections on the Recipes screen to create a collection.").foregroundStyle(.secondary) }
                 ForEach(store.collections) { collection in
                     Toggle(collection.name, isOn: Binding(get: { selected.contains(collection.id) }, set: { on in if on { selected.insert(collection.id) } else { selected.remove(collection.id) } }))
                 }

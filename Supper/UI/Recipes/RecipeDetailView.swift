@@ -142,14 +142,14 @@ struct RecipeDetailView: View {
                 Text("Ingredients").font(.title2.bold()).accessibilityAddTraits(.isHeader)
                 Spacer()
                 Menu {
-                    Picker("Group ingredients by", selection: $byShoppingCategory) {
-                        Text("Recipe groups").tag(false); Text("Shopping categories").tag(true)
+                    Picker("Organise ingredients by", selection: $byShoppingCategory) {
+                        Text("Recipe sections").tag(false); Text("Shopping categories").tag(true)
                     }
                 } label: { Image(systemName: "line.3.horizontal.decrease") }.accessibilityLabel("Ingredient grouping")
             }
             ForEach(IngredientSection.sections(scaled, byShoppingCategory: byShoppingCategory)) { group in
                 VStack(alignment: .leading, spacing: 8) {
-                    if group.title != "Ingredients" { Text(group.title).font(.subheadline.weight(.semibold)).textCase(.uppercase).padding(.top, 12).accessibilityAddTraits(.isHeader) }
+                    if group.title != "Ingredients" { Text(group.title.capitalized).font(.subheadline.weight(.semibold)).textCase(nil).padding(.top, 12).accessibilityAddTraits(.isHeader) }
                     LazyVStack(spacing: 4) {
                         ForEach(group.ingredients) { ingredient in
                             IngredientLabel(ingredient: ingredient)

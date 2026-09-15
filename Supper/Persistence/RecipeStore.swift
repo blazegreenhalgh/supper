@@ -21,6 +21,12 @@ final class RecipeStore: ObservableObject {
     @Published private(set) var recipes: [Recipe] = []
     @Published private(set) var groceryItems: [GroceryItem] = []
     @Published private(set) var collections: [RecipeCollection] = []
+    @Published private(set) var allRecipesSection = RecipeCollection(id: RecipeCollection.allRecipesID, name: "All recipes", isOnHome: true, order: Int.max)
+    var collectionSections: [RecipeCollection] {
+        (collections + [allRecipesSection]).sorted {
+            $0.order == $1.order ? $0.id.uuidString < $1.id.uuidString : $0.order < $1.order
+        }
+    }
     @Published private(set) var members: [HouseholdMember] = []
     @Published private(set) var households: [HouseholdSummary] = []
     @Published private(set) var hiddenLibraryCount = 0
@@ -220,6 +226,7 @@ final class RecipeStore: ObservableObject {
     }
 
     func saveCollection(_ collection: RecipeCollection) throws {
+        guard collection.id != RecipeCollection.allRecipesID else { throw SupperError.invalid("All recipes is a built-in section.") }
         guard !collection.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw SupperError.invalid("Give the collection a name.") }
         try mutate { context, root in
             let existing = (root.collections?.allObjects as? [RecipeCollectionMO] ?? []).first { $0.id == collection.id }
@@ -230,13 +237,26 @@ final class RecipeStore: ObservableObject {
         }
     }
     func deleteCollection(_ id: UUID) throws {
+        guard id != RecipeCollection.allRecipesID else { throw SupperError.invalid("All recipes cannot be deleted.") }
         try mutate { _, root in
             for object in root.collections?.allObjects as? [RecipeCollectionMO] ?? [] where object.id == id { object.removed = true }
         }
     }
     func reorderCollections(_ ids: [UUID]) throws {
-        try mutate { _, root in
-            for object in root.collections?.allObjects as? [RecipeCollectionMO] ?? [] {
+        let ids = ids.contains(RecipeCollection.allRecipesID) ? ids : ids + [RecipeCollection.allRecipesID]
+        guard Set(ids) == Set(collectionSections.map(\.id)), Set(ids).count == ids.count else {
+            throw SupperError.invalid("The collections changed. Reopen Collections and try again.")
+        }
+        try mutate { context, root in
+            var objects = root.collections?.allObjects as? [RecipeCollectionMO] ?? []
+            if !objects.contains(where: { $0.id == RecipeCollection.allRecipesID }) {
+                let object = RecipeCollectionMO(entity: NSEntityDescription.entity(forEntityName: "RecipeCollection", in: context)!, insertInto: context)
+                assign(object, root: root, context: context)
+                object.id = RecipeCollection.allRecipesID; object.name = "All recipes"
+                object.isOnHome = true; object.removed = false; object.library = root
+                objects.append(object)
+            }
+            for object in objects {
                 if let id = object.id, let index = ids.firstIndex(of: id) { object.order = NSNumber(value: index) }
             }
         }
@@ -364,9 +384,12 @@ final class RecipeStore: ObservableObject {
         let memberObjects = root.members?.allObjects as? [HouseholdMemberMO] ?? []
         members = memberObjects.compactMap { object in object.id.map { HouseholdMember(id: $0, name: object.name ?? "Household member", accountID: object.accountID) } }
         currentMemberID = ReactionIdentity.canonical(identity.id, members: members)
-        collections = (root.collections?.allObjects as? [RecipeCollectionMO] ?? []).filter { $0.removed?.boolValue != true }.compactMap { object in
+        let storedSections = (root.collections?.allObjects as? [RecipeCollectionMO] ?? []).filter { $0.removed?.boolValue != true }.compactMap { object in
             object.id.map { RecipeCollection(id: $0, name: object.name ?? "Collection", isOnHome: object.isOnHome?.boolValue ?? false, order: object.order?.intValue ?? 0) }
         }.sorted { $0.order == $1.order ? $0.id.uuidString < $1.id.uuidString : $0.order < $1.order }
+        allRecipesSection = storedSections.first { $0.id == RecipeCollection.allRecipesID }
+            ?? RecipeCollection(id: RecipeCollection.allRecipesID, name: "All recipes", isOnHome: true, order: Int.max)
+        collections = storedSections.filter { $0.id != RecipeCollection.allRecipesID }
         recipes = (root.recipes?.allObjects as? [RecipeMO] ?? []).map { Self.domainRecipe($0, members: members, collections: collections) }.sorted { $0.createdAt > $1.createdAt }
         let contributions = (root.groceryItems?.allObjects as? [GroceryItemMO] ?? []).filter { $0.removed?.boolValue != true }
         // A repeated operation delivered twice is projected once; a removed copy suppresses retries.
