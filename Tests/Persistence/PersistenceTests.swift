@@ -62,7 +62,7 @@ import Testing
         try store.addIngredientsToGroceryList(from: recipe, ingredients: [ingredient], operationID: operation)
         try store.toggleGroceryItem(try #require(store.groceryItems.first))
         try store.addGroceryItem(name: "Milk")
-        #expect(store.groceryItems.contains(where: \.isChecked))
+        #expect(store.groceryItems.contains { $0.isChecked })
         #expect(store.groceryItems.contains { !$0.isChecked })
         try store.clearAllGroceryItems()
         try store.refresh()
