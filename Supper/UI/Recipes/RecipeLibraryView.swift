@@ -6,7 +6,7 @@ extension UTType {
 }
 
 extension RecipeDragItem: Transferable {
-    static var transferRepresentation: some TransferRepresentation {
+    public static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(contentType: .supperRecipeCard)
     }
 }
