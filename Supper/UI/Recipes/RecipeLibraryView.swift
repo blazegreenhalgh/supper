@@ -28,7 +28,7 @@ struct RecipeLibraryView: View {
     private var columns: [GridItem] { Array(repeating: GridItem(.flexible(minimum: 0), spacing: 16, alignment: .top), count: columnCount) }
     private var filteredRecipes: [Recipe] { store.recipes.filter { filter.matches($0, collections: store.collections, memberID: store.currentMemberID, members: store.members) } }
     private var allTags: [String] { Array(Set(store.recipes.flatMap(\.tags))).sorted() }
-    var body: some View {
+    private var libraryContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 if !isSearch {
@@ -101,6 +101,10 @@ struct RecipeLibraryView: View {
             }.padding(.top, 12).padding(.bottom, 32)
                 .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: filter)
         }
+    }
+
+    var body: some View {
+        libraryContent
         .background(SupperStyle.canvas)
         .navigationTitle(isSearch ? "Search" : "Supper")
         .toolbar {
