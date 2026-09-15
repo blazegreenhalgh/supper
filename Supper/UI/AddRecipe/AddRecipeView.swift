@@ -37,7 +37,8 @@ struct AddRecipeView: View {
                     RecipeEditorChatView(draft: assistantDraft, session: recipeChat, expanded: $chatExpanded) {
                         showingRecipeChat = false
                     }
-                    .frame(height: chatExpanded ? min(380, geometry.size.height * 0.65, max(180, geometry.size.height * 0.48)) : 58)
+                    .frame(height: chatExpanded ? min(380, geometry.size.height * 0.65, max(180, geometry.size.height * 0.48)) : nil)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
                 }
             }
         }

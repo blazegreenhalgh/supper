@@ -35,11 +35,12 @@ struct AISettingsView: View {
             Section("AI features") {
                 LabeledContent("Recipe search & editing", value: "GPT-5.6 Terra")
                 LabeledContent("Recipe covers", value: "GPT Image 2.5 Flare")
+                LabeledContent("Food photo editing", value: "GPT Image 2.5 Sunburst")
                 Text("Recipe discovery only imports published recipes. Ask AI shows online sources and lets you review changes before applying them.")
                 Text("Formatting, simple tags and text recognition stay on-device. Manual editing and URL import don’t require a key.")
             }
             Section {
-                Text("Using AI sends your request and relevant recipe content to OpenAI. Online searches are sent through OpenAI’s web-search tool and recipe pages are downloaded from their publishers. Photo import reads text on-device before sending that text; cover generation sends the title and ingredient list. Your API key is sent only to api.openai.com.")
+                Text("Using AI sends your request and relevant recipe content to OpenAI. Online searches use OpenAI’s web-search tool; recipe pages and photos are downloaded from their publishers. Recipe text import reads photos on-device before sending the recognised text. Cover generation sends the title and ingredient list. Polish my photo sends your selected food image for editing, with camera metadata removed. Your API key is sent only to api.openai.com.")
                 Text("API usage is billed separately from ChatGPT. Saving a key enables these user-requested features; no paid requests run in the background. OpenAI requests use store: false where supported, but OpenAI’s API data policies still apply.")
                 Link("Create an API key", destination: URL(string: "https://platform.openai.com/api-keys")!)
                 Link("Manage API billing", destination: URL(string: "https://platform.openai.com/settings/organization/billing/overview")!)

@@ -6,6 +6,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AD4000000000000000000001 /* RecipePhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD3000000000000000000001; };
+		AD4000000000000000000002 /* RecipePhotoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD3000000000000000000002; };
+		AD4000000000000000000003 /* RecipePhotoReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD3000000000000000000003; };
 		2C1053DD23AE2E0A86C4A3D1 /* SupperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFB9E684B91480FB2721BAC7 /* SupperApp.swift */; };
 		48730AB73D18A859328B17B5 /* RecipeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 278F909B94F2FFB455B1F63D /* RecipeModels.swift */; };
 		0DEF34C24D60ED6A1E8F3DC5 /* ManagedObjects.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE4D2A61F08EEB04860D338D /* ManagedObjects.swift */; };
@@ -63,6 +66,9 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		AD3000000000000000000001 /* RecipePhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Domain/RecipePhoto.swift"; sourceTree = SOURCE_ROOT; };
+		AD3000000000000000000002 /* RecipePhotoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Services/RecipePhotoService.swift"; sourceTree = SOURCE_ROOT; };
+		AD3000000000000000000003 /* RecipePhotoReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/UI/AddRecipe/RecipePhotoReviewView.swift"; sourceTree = SOURCE_ROOT; };
 		A97C29AD63741CF438998CE6 /* Supper - Shared Cookbook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Supper - Shared Cookbook.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		188BDC112B00A615FE505EDD /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "App.xcconfig"; sourceTree = "<group>"; };
 		F3B1BC8A121BEEE1C1EEF424 /* Supper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Supper.entitlements"; sourceTree = "<group>"; };
@@ -138,6 +144,9 @@
 		BF7A2D27A78D590BDEF15AF2 /* Products */ = {isa = PBXGroup; children = (DD0000000000000000000002,A97C29AD63741CF438998CE6 /* Supper - Shared Cookbook.app */,); name = Products; sourceTree = "<group>"; };
 		BD13AA3ACFF3D0C2ED6E4720 /* Config */ = {isa = PBXGroup; children = (188BDC112B00A615FE505EDD /* App.xcconfig */,); path = Config; sourceTree = "<group>"; };
 		E98CA76C287370E0E9D02D75 /* Supper */ = {isa = PBXGroup; children = (
+			AD3000000000000000000001 /* RecipePhoto.swift */,
+			AD3000000000000000000002 /* RecipePhotoService.swift */,
+			AD3000000000000000000003 /* RecipePhotoReviewView.swift */,
 			AB3000000000000000000007 /* RecipeCoverView.swift */,
 			AB3000000000000000000006 /* AISettingsView.swift */,
 			AB3000000000000000000005 /* CloudRecipeAssistant.swift */,
@@ -247,6 +256,9 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		E7209FB05162B7572F88D05E /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+			AD4000000000000000000001 /* RecipePhoto.swift in Sources */,
+			AD4000000000000000000002 /* RecipePhotoService.swift in Sources */,
+			AD4000000000000000000003 /* RecipePhotoReviewView.swift in Sources */,
 			AB4000000000000000000007 /* RecipeCoverView.swift in Sources */,
 			AB4000000000000000000006 /* AISettingsView.swift in Sources */,
 			AB4000000000000000000005 /* CloudRecipeAssistant.swift in Sources */,
