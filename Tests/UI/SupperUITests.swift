@@ -12,6 +12,7 @@ import XCTest
         app.buttons["saveOpenAIKey"].tap()
         XCTAssertTrue(app.staticTexts["API key saved on this device"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Test connection"].exists)
+        capture(app, "OpenAI key settings")
         // Never test a live connection with a fixture key.
         app.terminate(); app.launch()
         app.buttons["Library options"].tap(); app.buttons["Household"].tap(); app.buttons["openAISettings"].tap()
@@ -20,7 +21,7 @@ import XCTest
         replacement.tap(); replacement.typeText("sk-ui-test-replacement-key-1234567890")
         app.buttons["saveOpenAIKey"].tap()
         app.buttons["Remove key"].tap()
-        app.buttons["Remove key"].lastMatch.tap()
+        app.buttons["confirmRemoveOpenAIKey"].tap()
         XCTAssertTrue(app.staticTexts["Connect your OpenAI account"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Test connection"].exists)
     }

@@ -8,6 +8,7 @@ struct AISettingsView: View {
     @State private var testing = false
     @State private var task: Task<Void, Never>?
     @State private var confirmingRemoval = false
+    @FocusState private var keyFocused: Bool
 
     var body: some View {
         Form {
@@ -15,9 +16,10 @@ struct AISettingsView: View {
                 Label(settings.isConfigured ? "API key saved on this device" : "Connect your OpenAI account", systemImage: settings.isConfigured ? "checkmark.shield" : "key")
                 SecureField(settings.isConfigured ? "Replacement API key" : "OpenAI API key", text: $key)
                     .textInputAutocapitalization(.never).autocorrectionDisabled().privacySensitive()
+                    .focused($keyFocused)
                     .accessibilityIdentifier("openAIKeyInput")
                 Button(settings.isConfigured ? "Replace key" : "Save key") {
-                    do { try settings.save(key); key = ""; status = "Saved securely on this device. You can now use AI features." }
+                    do { try settings.save(key); key = ""; keyFocused = false; status = "Saved securely on this device. You can now use AI features." }
                     catch { self.error = error.localizedDescription }
                 }.disabled(key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || testing)
                     .accessibilityIdentifier("saveOpenAIKey")
@@ -51,7 +53,7 @@ struct AISettingsView: View {
             Button("Remove key", role: .destructive) {
                 do { try settings.remove(); key = ""; status = "Key removed. Your recipes have not changed." }
                 catch { self.error = error.localizedDescription }
-            }
+            }.accessibilityIdentifier("confirmRemoveOpenAIKey")
         }
         .supperError($error, title: "OpenAI connection")
     }
