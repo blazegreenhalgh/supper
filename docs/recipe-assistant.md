@@ -46,6 +46,8 @@ Mocked transport tests cover model IDs, structured output, required search, sour
 
 UI coverage includes opening AI settings, saving/replacing/removing a fixture key, persistence across app relaunch, and existing chat/discovery flows. No real key or live generation is needed for CI.
 
+CI ad-hoc-signs simulator builds with `Tests/UI/Simulator.entitlements` so real Keychain operations have an app identity. This simulator-only identity is passed by the workflow, never used by device or distribution builds. The focused Keychain test runs before the remaining UI suite for faster diagnostics; shipping signing and Keychain protection are unchanged.
+
 Live acceptance after entering a funded key:
 1. Test connection; find published recipes with exclusions and duration constraints. Verify each source.
 2. Create “Naan bread pizza” with only its title. Ask for just naan ingredients and method, inspect the source/yield and unchanged pizza content, then Apply, Undo and Save.

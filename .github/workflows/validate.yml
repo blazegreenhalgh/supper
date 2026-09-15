@@ -16,9 +16,13 @@ jobs:
       - name: Domain and persistence regression tests
         run: swift test
       - name: Build iOS simulator app
-        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build
+        # Keychain tests need a signed simulator app with an application identity.
+        # Ad-hoc signing needs no Apple credentials; shipping entitlements are unchanged.
+        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements build
+      - name: API key Keychain UI regression test
+        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath DerivedData -resultBundlePath AIResults -only-testing:SupperUITests/SupperUITests/testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
       - name: Native navigation and editor UI regression tests
-        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath DerivedData -resultBundlePath UIResults CODE_SIGNING_ALLOWED=NO test
+        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath DerivedData -resultBundlePath UIResults -skip-testing:SupperUITests/SupperUITests/testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
       - name: Export navigation screenshots
         if: always()
         run: |
@@ -36,4 +40,6 @@ jobs:
         if: always()
         with:
           name: ui-test-results
-          path: UIResults.xcresult
+          path: |
+            AIResults.xcresult
+            UIResults.xcresult

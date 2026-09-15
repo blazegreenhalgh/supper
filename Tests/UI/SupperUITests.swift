@@ -10,7 +10,9 @@ import XCTest
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap(); field.typeText("sk-ui-test-not-a-real-key-1234567890")
         app.buttons["saveOpenAIKey"].tap()
-        XCTAssertTrue(app.staticTexts["API key saved on this device"].waitForExistence(timeout: 5))
+        guard app.staticTexts["API key saved on this device"].waitForExistence(timeout: 5) else {
+            XCTFail("Key save failed: \(app.alerts.debugDescription)"); return
+        }
         XCTAssertTrue(app.buttons["Test connection"].exists)
         capture(app, "OpenAI key settings")
         // Never test a live connection with a fixture key.
@@ -234,6 +236,11 @@ import XCTest
         XCTAssertTrue(app.buttons["editIngredients"].waitForExistence(timeout: 5))
         capture(app, "Recipe editor overview")
         app.buttons["editIngredients"].tap()
+        // Retry navigation only if the animated sheet is still on the recipe editor.
+        if !app.buttons["addIngredient"].waitForExistence(timeout: 3), app.buttons["editIngredients"].exists {
+            app.buttons["editIngredients"].tap()
+        }
+        XCTAssertTrue(app.buttons["addIngredient"].waitForExistence(timeout: 5))
         app.buttons["addIngredient"].tap()
         let name = app.textFields["ingredientName"]
         // A vertical TextField is exposed as a text view on some iOS versions.

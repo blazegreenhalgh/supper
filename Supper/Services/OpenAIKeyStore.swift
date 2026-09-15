@@ -33,12 +33,13 @@ enum OpenAIKeyStore {
         if status == errSecItemNotFound {
             var item = query
             attributes.forEach { item[$0.key] = $0.value }
-            guard SecItemAdd(item as CFDictionary, nil) == errSecSuccess else { throw storageError }
-        } else if status != errSecSuccess { throw storageError }
+            let addStatus = SecItemAdd(item as CFDictionary, nil)
+            guard addStatus == errSecSuccess else { throw storageError(addStatus) }
+        } else if status != errSecSuccess { throw storageError(status) }
     }
     static func remove() throws {
         let status = SecItemDelete(query as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else { throw storageError }
+        guard status == errSecSuccess || status == errSecItemNotFound else { throw storageError(status) }
     }
     static func client() throws -> OpenAIClient {
         #if DEBUG
@@ -49,7 +50,10 @@ enum OpenAIKeyStore {
         guard let key = try read() else { throw SupperError.invalid("Add your OpenAI API key in Settings → AI to use this feature. Manual editing and on-device formatting still work.") }
         return try OpenAIClient(apiKey: key)
     }
-    private static var storageError: SupperError { .invalid("Couldn’t update the API key in this device’s Keychain. Your previous key, if any, has not been replaced.") }
+    private static func storageError(_ status: OSStatus) -> SupperError {
+        // Only the numeric OS status is diagnostic; never include the item or key.
+        .invalid("Couldn’t update the API key in this device’s Keychain (error \(status)). Your previous key, if any, has not been replaced.")
+    }
 }
 
 @MainActor final class OpenAISettings: ObservableObject {
