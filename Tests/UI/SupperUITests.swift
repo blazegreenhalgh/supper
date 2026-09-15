@@ -1,6 +1,32 @@
 import XCTest
 
 @MainActor final class SupperUITests: XCTestCase {
+    func testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests() {
+        let app = launch()
+        app.buttons["Library options"].tap()
+        app.buttons["Household"].tap()
+        app.buttons["openAISettings"].tap()
+        let field = app.secureTextFields["openAIKeyInput"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap(); field.typeText("sk-ui-test-not-a-real-key-1234567890")
+        app.buttons["saveOpenAIKey"].tap()
+        guard app.staticTexts["API key saved on this device"].waitForExistence(timeout: 5) else {
+            XCTFail("Key save failed: \(app.alerts.debugDescription)"); return
+        }
+        XCTAssertTrue(app.buttons["Test connection"].exists)
+        capture(app, "OpenAI key settings")
+        // Never test a live connection with a fixture key.
+        app.terminate(); app.launch()
+        app.buttons["Library options"].tap(); app.buttons["Household"].tap(); app.buttons["openAISettings"].tap()
+        XCTAssertTrue(app.staticTexts["API key saved on this device"].waitForExistence(timeout: 5))
+        let replacement = app.secureTextFields["openAIKeyInput"]
+        replacement.tap(); replacement.typeText("sk-ui-test-replacement-key-1234567890")
+        app.buttons["saveOpenAIKey"].tap()
+        app.buttons["Remove key"].tap()
+        app.buttons["confirmRemoveOpenAIKey"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Connect your OpenAI account"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Test connection"].exists)
+    }
     func testRecipeChatKeepsInputWhenReopenedAndCancelDoesNotSave() {
         let app = launch(); openRecipe(app)
         app.buttons["editRecipe"].tap()
@@ -210,6 +236,11 @@ import XCTest
         XCTAssertTrue(app.buttons["editIngredients"].waitForExistence(timeout: 5))
         capture(app, "Recipe editor overview")
         app.buttons["editIngredients"].tap()
+        // Retry navigation only if the animated sheet is still on the recipe editor.
+        if !app.buttons["addIngredient"].waitForExistence(timeout: 3), app.buttons["editIngredients"].exists {
+            app.buttons["editIngredients"].tap()
+        }
+        XCTAssertTrue(app.buttons["addIngredient"].waitForExistence(timeout: 5))
         app.buttons["addIngredient"].tap()
         let name = app.textFields["ingredientName"]
         // A vertical TextField is exposed as a text view on some iOS versions.

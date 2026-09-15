@@ -2,7 +2,6 @@ import Foundation
 
 public enum RecipeDiscoveryMode: String, CaseIterable, Sendable {
     case online = "Find online"
-    case create = "Create with AI"
 }
 
 public struct RecipeSuggestion: Identifiable, Sendable {
@@ -10,7 +9,7 @@ public struct RecipeSuggestion: Identifiable, Sendable {
     public let mode: RecipeDiscoveryMode
     public var id: UUID { recipe.id }
     public var sourceLabel: String {
-        mode == .create ? "Created with AI" : (recipe.sourceURL?.host?.replacingOccurrences(of: "www.", with: "") ?? "Found online")
+        recipe.sourceURL?.host?.replacingOccurrences(of: "www.", with: "") ?? "Found online"
     }
     public init(recipe: Recipe, mode: RecipeDiscoveryMode) { self.recipe = recipe; self.mode = mode }
 }

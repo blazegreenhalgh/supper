@@ -14,6 +14,7 @@ struct AddRecipeView: View {
     @State private var showingURLImport = false
     @State private var showingAssistant = false
     @State private var showingRecipeChat = false
+    @State private var showingCover = false
     @StateObject private var recipeChat = RecipeChatSession()
     @State private var errorMessage: String?
     @State private var task: Task<Void, Never>?
@@ -44,6 +45,9 @@ struct AddRecipeView: View {
                     Button("Ask AI", systemImage: "sparkles") { showingRecipeChat = true }
                         .font(.subheadline).foregroundStyle(.primary)
                         .accessibilityIdentifier("askRecipeAI")
+                    Button("Generate cover", systemImage: "photo") { showingCover = true }
+                        .font(.subheadline).foregroundStyle(.primary)
+                        .accessibilityIdentifier("generateRecipeCover")
                     if draft.imageData != nil { Button("Remove photo", role: .destructive) { draft.imageData = nil }.font(.subheadline) }
                 } footer: { Text("Start with just a title. Add everything else when you’re ready.") }
                 if original == nil {
@@ -118,6 +122,7 @@ struct AddRecipeView: View {
             .sheet(isPresented: $showingURLImport) { URLImportView(onImported: imported) }
             .sheet(isPresented: $showingAssistant) { RecipeAssistanceView(onImported: imported) }
             .sheet(isPresented: $showingRecipeChat) { RecipeEditorChatView(draft: assistantDraft, session: recipeChat) }
+            .sheet(isPresented: $showingCover) { RecipeCoverView(draft: assistantDraft) }
             .supperError($errorMessage, title: "Couldn't save changes")
         }
     }

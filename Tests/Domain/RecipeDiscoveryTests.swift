@@ -27,7 +27,7 @@ final class RecipeDiscoveryTests: XCTestCase {
         }
     }
     func testEditingKeepsIdentityAndDoesNotKeepRecipe() {
-        let suggestion = RecipeSuggestion(recipe: Recipe(title: "Chicken", ingredients: [Ingredient(name: "rice", quantity: "200", unit: "g")]), mode: .create)
+        let suggestion = RecipeSuggestion(recipe: Recipe(title: "Chicken", ingredients: [Ingredient(name: "rice", quantity: "200", unit: "g")]), mode: .online)
         var review = RecipeDiscoveryReview(suggestions: [suggestion])
         var draft = RecipeDraft(recipe: suggestion.recipe)
         draft.title = "Lemon chicken"; draft.ingredients[0].quantity = "300"
@@ -42,8 +42,8 @@ final class RecipeDiscoveryTests: XCTestCase {
         XCTAssertTrue(review.pending.isEmpty)
     }
     func testDiscardUndoRestoresEditsAndNeverUndoesKeep() {
-        let first = RecipeSuggestion(recipe: Recipe(title: "First"), mode: .create)
-        let second = RecipeSuggestion(recipe: Recipe(title: "Second"), mode: .create)
+        let first = RecipeSuggestion(recipe: Recipe(title: "First"), mode: .online)
+        let second = RecipeSuggestion(recipe: Recipe(title: "Second"), mode: .online)
         var review = RecipeDiscoveryReview(suggestions: [first, second])
         var edited = first.recipe; edited.title = "Edited first"
         review.edit(edited); review.discard(first.id); review.didKeep(second.id)

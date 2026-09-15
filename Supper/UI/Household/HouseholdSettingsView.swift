@@ -23,6 +23,10 @@ struct HouseholdSettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    NavigationLink { AISettingsView() } label: { Label("AI", systemImage: "sparkles") }
+                        .accessibilityIdentifier("openAISettings")
+                }
                 Section("Your identity") {
                     TextField("Display name", text: $name)
                     Button("Save name") { do { try store.renameMember(name) } catch { self.error = error.localizedDescription } }

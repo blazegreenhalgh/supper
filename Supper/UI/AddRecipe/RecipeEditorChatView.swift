@@ -100,6 +100,8 @@ struct RecipeEditorChatView: View {
     @ObservedObject var session: RecipeChatSession
     @FocusState private var inputFocused: Bool
     @State private var reviewing = false
+    @ObservedObject private var aiSettings = OpenAISettings.shared
+    @State private var showingAISettings = false
 
     var body: some View {
         NavigationStack {
@@ -145,6 +147,9 @@ struct RecipeEditorChatView: View {
             .safeAreaInset(edge: .bottom) { composer }
             .onAppear { session.reconcile(with: draft) }
             .onDisappear { session.stop() }
+            .sheet(isPresented: $showingAISettings) {
+                NavigationStack { AISettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingAISettings = false } } } }
+            }
             .sheet(isPresented: $reviewing) {
                 if let proposal = session.pending {
                     RecipeAssistantReviewView(proposal: proposal, canApply: !session.busy && proposal.base == draft) {
@@ -159,7 +164,7 @@ struct RecipeEditorChatView: View {
         VStack(alignment: .leading, spacing: 12) {
             Label(draft.title.isEmpty ? "Build your recipe" : draft.title, systemImage: "sparkles")
                 .font(.title3.weight(.semibold))
-            if RecipeEditorAssistant.isAvailable {
+            if aiSettings.isConfigured {
                 Text("Tell me what to add or change. I’ll consult online recipes and let you review the changes first.")
                     .font(.subheadline).foregroundStyle(.secondary)
                 if session.messages.isEmpty {
@@ -169,8 +174,9 @@ struct RecipeEditorChatView: View {
                     }
                 }
             } else {
-                Text("Ask AI needs Apple Intelligence enabled on a supported device. You can still add ingredients and steps manually, or import a recipe from a website.")
+                Text("Connect your OpenAI API key to search published recipes and edit this draft. Your request and relevant recipe content will be sent to OpenAI. Manual editing and URL import still work without a key.")
                     .font(.subheadline).foregroundStyle(.secondary)
+                Button("Set up OpenAI", systemImage: "key") { showingAISettings = true }
             }
         }
     }
@@ -180,7 +186,7 @@ struct RecipeEditorChatView: View {
             return ["Find ingredients and a method for this recipe", "Help me with just one part of this recipe"]
         }
         if draft.steps.isEmpty { return ["Find a method for these ingredients", "Help me add another part of this recipe"] }
-        return ["Help me add another part of this recipe", "Scale this recipe to…", "Clean up the ingredient formatting"]
+        return ["Help me add another part of this recipe", "Find a published alternative for…", "Organise this recipe into sections"]
     }
 
     private func messageView(_ message: RecipeChatMessage) -> some View {
@@ -242,7 +248,7 @@ struct RecipeEditorChatView: View {
                 } else {
                     Button("Send", systemImage: "arrow.up") { send() }
                         .labelStyle(.iconOnly).supperGlassButton(prominent: true).controlSize(.large)
-                        .disabled(!RecipeEditorAssistant.isAvailable || session.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.input.count > 1200)
+                        .disabled(!aiSettings.isConfigured || session.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.input.count > 1200)
                         .accessibilityIdentifier("sendRecipeChat")
                 }
             }

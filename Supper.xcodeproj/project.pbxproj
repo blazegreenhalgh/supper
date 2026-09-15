@@ -52,6 +52,13 @@
 		26A6F5992E6BD19A2613D525 /* RecipeAssistant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5374F56631EEA4C8B8968F5D; };
 		06E0E84460C8AAD0819392EF /* RecipeEditorAssistant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F71A7D2447F9FD490E41F81; };
 		0901D0E66DADCDEE6FBFFD26 /* RecipeEditorChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB52FDF6D2386E5D54345596; };
+		AB4000000000000000000001 /* OpenAIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB3000000000000000000001; };
+		AB4000000000000000000002 /* RecipeAIEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB3000000000000000000002; };
+		AB4000000000000000000003 /* OpenAIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB3000000000000000000003; };
+		AB4000000000000000000004 /* RecipeResearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB3000000000000000000004; };
+		AB4000000000000000000005 /* CloudRecipeAssistant.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB3000000000000000000005; };
+		AB4000000000000000000006 /* AISettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB3000000000000000000006; };
+		AB4000000000000000000007 /* RecipeCoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB3000000000000000000007; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -105,6 +112,13 @@
 		5374F56631EEA4C8B8968F5D /* RecipeAssistant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Domain/RecipeAssistant.swift"; sourceTree = SOURCE_ROOT; };
 		4F71A7D2447F9FD490E41F81 /* RecipeEditorAssistant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Services/RecipeEditorAssistant.swift"; sourceTree = SOURCE_ROOT; };
 		EB52FDF6D2386E5D54345596 /* RecipeEditorChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/UI/AddRecipe/RecipeEditorChatView.swift"; sourceTree = SOURCE_ROOT; };
+		AB3000000000000000000001 /* OpenAIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Domain/OpenAIClient.swift"; sourceTree = SOURCE_ROOT; };
+		AB3000000000000000000002 /* RecipeAIEvidence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Domain/RecipeAIEvidence.swift"; sourceTree = SOURCE_ROOT; };
+		AB3000000000000000000003 /* OpenAIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Services/OpenAIKeyStore.swift"; sourceTree = SOURCE_ROOT; };
+		AB3000000000000000000004 /* RecipeResearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Services/RecipeResearch.swift"; sourceTree = SOURCE_ROOT; };
+		AB3000000000000000000005 /* CloudRecipeAssistant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Services/CloudRecipeAssistant.swift"; sourceTree = SOURCE_ROOT; };
+		AB3000000000000000000006 /* AISettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/UI/Household/AISettingsView.swift"; sourceTree = SOURCE_ROOT; };
+		AB3000000000000000000007 /* RecipeCoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/UI/AddRecipe/RecipeCoverView.swift"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -122,6 +136,13 @@
 		BF7A2D27A78D590BDEF15AF2 /* Products */ = {isa = PBXGroup; children = (DD0000000000000000000002,A97C29AD63741CF438998CE6 /* Supper - Shared Cookbook.app */,); name = Products; sourceTree = "<group>"; };
 		BD13AA3ACFF3D0C2ED6E4720 /* Config */ = {isa = PBXGroup; children = (188BDC112B00A615FE505EDD /* App.xcconfig */,); path = Config; sourceTree = "<group>"; };
 		E98CA76C287370E0E9D02D75 /* Supper */ = {isa = PBXGroup; children = (
+			AB3000000000000000000007 /* RecipeCoverView.swift */,
+			AB3000000000000000000006 /* AISettingsView.swift */,
+			AB3000000000000000000005 /* CloudRecipeAssistant.swift */,
+			AB3000000000000000000004 /* RecipeResearch.swift */,
+			AB3000000000000000000003 /* OpenAIKeyStore.swift */,
+			AB3000000000000000000002 /* RecipeAIEvidence.swift */,
+			AB3000000000000000000001 /* OpenAIClient.swift */,
 			EB52FDF6D2386E5D54345596 /* RecipeEditorChatView.swift */,
 			4F71A7D2447F9FD490E41F81 /* RecipeEditorAssistant.swift */,
 			5374F56631EEA4C8B8968F5D /* RecipeAssistant.swift */,
@@ -223,6 +244,13 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		E7209FB05162B7572F88D05E /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+			AB4000000000000000000007 /* RecipeCoverView.swift in Sources */,
+			AB4000000000000000000006 /* AISettingsView.swift in Sources */,
+			AB4000000000000000000005 /* CloudRecipeAssistant.swift in Sources */,
+			AB4000000000000000000004 /* RecipeResearch.swift in Sources */,
+			AB4000000000000000000003 /* OpenAIKeyStore.swift in Sources */,
+			AB4000000000000000000002 /* RecipeAIEvidence.swift in Sources */,
+			AB4000000000000000000001 /* OpenAIClient.swift in Sources */,
 			0901D0E66DADCDEE6FBFFD26 /* RecipeEditorChatView.swift in Sources */,
 			06E0E84460C8AAD0819392EF /* RecipeEditorAssistant.swift in Sources */,
 			26A6F5992E6BD19A2613D525 /* RecipeAssistant.swift in Sources */,
