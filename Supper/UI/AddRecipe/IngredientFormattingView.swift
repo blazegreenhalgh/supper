@@ -24,28 +24,32 @@ struct IngredientFormattingView: View {
                         }
                         ForEach($editedChanges) { $change in
                             Section {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("Original").font(.caption).foregroundStyle(.secondary)
-                                    Text(change.original.displayText).font(.callout).foregroundStyle(.secondary)
-                                }
-                                Toggle("Apply this change", isOn: Binding(get: { selected.contains(change.id) }, set: { on in
-                                    if on { selected.insert(change.id) } else { selected.remove(change.id) }
-                                }))
-                                .tint(Color(uiColor: .systemBlue))
-                                .accessibilityIdentifier("formatChange-" + change.id.uuidString)
-                                TextField("Ingredient name", text: $change.proposed.name, axis: .vertical)
-                                    .accessibilityIdentifier("formattedName-" + change.id.uuidString)
-                                LabeledContent("Quantity") {
-                                    TextField("Optional", text: $change.proposed.quantity)
-                                        .multilineTextAlignment(.trailing)
-                                        .accessibilityIdentifier("formattedQuantity-" + change.id.uuidString)
-                                }
-                                LabeledContent("Unit") {
-                                    TextField("Optional", text: $change.proposed.unit)
-                                        .multilineTextAlignment(.trailing)
-                                        .textInputAutocapitalization(.never).autocorrectionDisabled()
-                                        .accessibilityIdentifier("formattedUnit-" + change.id.uuidString)
-                                }
+                                HStack(alignment: .top, spacing: 16) {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        Text(change.original.displayText)
+                                            .font(.callout).foregroundStyle(.secondary).strikethrough()
+                                            .accessibilityIdentifier("formatOriginal-" + change.id.uuidString)
+                                        HStack(alignment: .firstTextBaseline, spacing: 5) {
+                                            if !change.proposed.amount.isEmpty {
+                                                Text(change.proposed.amount).fontWeight(.semibold)
+                                            }
+                                            TextField("Ingredient name", text: $change.proposed.name, axis: .vertical)
+                                                .textFieldStyle(.plain)
+                                                .accessibilityIdentifier("formattedName-" + change.id.uuidString)
+                                        }.font(.body)
+                                    }.frame(maxWidth: .infinity, alignment: .leading)
+                                    Button {
+                                        if !selected.insert(change.id).inserted { selected.remove(change.id) }
+                                    } label: {
+                                        Image(systemName: selected.contains(change.id) ? "checkmark.circle.fill" : "circle")
+                                            .font(.title2).foregroundStyle(.primary)
+                                            .frame(minWidth: 32, minHeight: 44)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("Apply change for " + change.original.name)
+                                    .accessibilityValue(selected.contains(change.id) ? "Selected" : "Not selected")
+                                    .accessibilityIdentifier("formatChange-" + change.id.uuidString)
+                                }.padding(.vertical, 8)
                             } footer: {
                                 if let notice = change.notice { Text(notice) }
                             }

@@ -409,3 +409,14 @@ public struct RecipeSectionedContent<Item: RecipeSectionItem>: Hashable, Sendabl
         return true
     }
 }
+
+/// Tags are individual names. Punctuation, including commas, stays part of a name.
+public enum RecipeTagNames {
+    public static func clean(_ name: String) -> String {
+        name.components(separatedBy: .newlines).joined(separator: " ").trimmingCharacters(in: .whitespaces)
+    }
+    public static func normalized(_ names: [String]) -> [String] {
+        var seen = Set<String>()
+        return names.map(clean).filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+    }
+}

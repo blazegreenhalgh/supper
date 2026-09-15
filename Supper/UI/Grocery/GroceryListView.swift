@@ -4,6 +4,8 @@ struct GroceryListView: View {
     @EnvironmentObject private var store: RecipeStore
     @State private var newItem = ""
     @State private var showingRecipes = true
+    @State private var showingClearAll = false
+    @State private var clearingHouseholdID: UUID?
     @FocusState private var isAddingItem: Bool
 
     private var checked: [GroceryItem] { store.groceryItems.filter(\.isChecked) }
@@ -72,16 +74,29 @@ struct GroceryListView: View {
         .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Groceries")
         .toolbar {
-            if !checked.isEmpty {
+            if !store.groceryItems.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("Grocery options", systemImage: "ellipsis") {
-                        Button("Clear checked items", systemImage: "checkmark.circle", role: .destructive) {
-                            delete(IndexSet(checked.indices), from: checked)
+                        if !checked.isEmpty {
+                            Button("Clear checked items", systemImage: "checkmark.circle", role: .destructive) {
+                                delete(IndexSet(checked.indices), from: checked)
+                            }
                         }
+                        Button("Clear all items", systemImage: "trash", role: .destructive) {
+                            clearingHouseholdID = store.activeHouseholdID
+                            showingClearAll = true
+                        }.accessibilityIdentifier("clearAllGroceries")
                     }
                 }
             }
         }
+        .alert("Clear all groceries?", isPresented: $showingClearAll) {
+            Button("Clear all items", role: .destructive) {
+                guard clearingHouseholdID == store.activeHouseholdID else { return }
+                do { try store.clearAllGroceryItems() } catch { store.errorMessage = error.localizedDescription }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: { Text("Remove every item, including checked items, from this household’s grocery list?") }
         .overlay {
             if store.groceryItems.isEmpty {
                 ContentUnavailableView(

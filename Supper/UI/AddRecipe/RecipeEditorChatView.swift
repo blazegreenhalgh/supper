@@ -372,7 +372,6 @@ struct RecipeEditorChatView: View {
 
     private func messageView(_ message: RecipeChatMessage) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(message.isUser ? "You" : "Supper").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             Text(message.text).font(.body).textSelection(.enabled)
             if !message.assumptions.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {

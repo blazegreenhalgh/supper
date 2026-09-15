@@ -15,6 +15,7 @@ struct RecipeLibraryView: View {
     let openRecipe: (RecipeRoute) -> Void
     @State private var showingAddRecipe = false
     @State private var showingCollections = false
+    @State private var showingTags = false
     @State private var showingHousehold = false
     @State private var showingPicker = false
     @State private var showingSearchAssistant = false
@@ -31,7 +32,7 @@ struct RecipeLibraryView: View {
     private var libraryContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                VStack(spacing: SupperStyle.chipSpacing) {
+                VStack(spacing: 14) {
                     if !isSearch {
                         Button { showingDiscovery = true } label: {
                             Label("What are you craving?", systemImage: "sparkles").frame(maxWidth: .infinity)
@@ -40,11 +41,6 @@ struct RecipeLibraryView: View {
                     }
                     RecipeFilterChips(filter: $filter)
                 }
-                HStack {
-                    Text("\(filteredRecipes.count) recipes").font(.subheadline).foregroundStyle(.secondary)
-                        .contentTransition(.numericText())
-                    Spacer()
-                }.padding(.horizontal, 20)
                 if isSearch && !filter.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Button("Interpret this search", systemImage: "sparkle.magnifyingglass") { showingSearchAssistant = true }
                         .font(.subheadline).padding(.horizontal, 20)
@@ -127,6 +123,7 @@ struct RecipeLibraryView: View {
                         showingDiscovery = true
                     }
                     Button("Pick something", systemImage: "dice") { showingPicker = true }
+                    Button("Manage tags", systemImage: "tag") { showingTags = true }.accessibilityIdentifier("manageTags")
                     if !isSearch { Button("Household", systemImage: "person.2") { showingHousehold = true } }
                 }
             }
@@ -150,6 +147,7 @@ struct RecipeLibraryView: View {
         } message: { recipe in Text("Delete \(recipe.title) from the household library?") }
         .sheet(isPresented: $showingDiscovery) { RecipeDiscoveryView(model: discovery) }
         .sheet(isPresented: $showingCollections) { CollectionsView() }
+        .sheet(isPresented: $showingTags) { TagsView() }
         .sheet(isPresented: $showingHousehold) { HouseholdSettingsView() }
         .sheet(isPresented: $showingPicker) { PickRecipeView(recipes: filteredRecipes) { id in showingPicker = false; openRecipe(RecipeRoute(recipeID: id)) } }
         .sheet(isPresented: $showingSearchAssistant) { SearchAssistanceView(initialQuery: filter.query, collections: store.collections, tags: allTags) { filter = $0; showingSearchAssistant = false } }

@@ -3,6 +3,7 @@ import SwiftUI
 struct RecipeFilterChips: View {
     @EnvironmentObject private var store: RecipeStore
     @Binding var filter: RecipeFilter
+    @State private var showingTags = false
     @ScaledMetric(relativeTo: .subheadline) private var labelHeight: CGFloat = 22
     private var allTags: [String] { Array(Set(store.recipes.flatMap(\.tags))).sorted() }
     var body: some View {
@@ -41,7 +42,8 @@ struct RecipeFilterChips: View {
                             }
                         }
                         Button("Clear tags") { filter.tags = [] }
-                    } label: { chipLabel(filter.tags.isEmpty ? "Tags" : "Tags · \(filter.tags.count)", systemImage: "tag") }.filterChip(active: !filter.tags.isEmpty, identifier: "tagsFilter").disabled(allTags.isEmpty)
+                        Button("Manage tags…", systemImage: "tag") { showingTags = true }
+                    } label: { chipLabel(filter.tags.isEmpty ? "Tags" : "Tags · \(filter.tags.count)", systemImage: "tag") }.filterChip(active: !filter.tags.isEmpty, identifier: "tagsFilter")
 
                     Menu {
                         Picker("Reactions", selection: $filter.reaction) { ForEach(RecipeFilter.ReactionFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) } }
@@ -54,6 +56,7 @@ struct RecipeFilterChips: View {
             .accessibilityIdentifier("filterScrollView")
         }
         .font(.subheadline).controlSize(.small)
+        .sheet(isPresented: $showingTags) { TagsView() }
     }
 
     private func chipLabel(_ title: String, systemImage: String) -> some View {
