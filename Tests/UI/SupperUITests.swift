@@ -533,13 +533,13 @@ import XCTest
         XCTAssertTrue(chicken.isHittable)
         let destination = plus.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .withOffset(CGVector(dx: -90, dy: 0))
-        chicken.press(forDuration: 1, thenDragTo: destination, withVelocity: .slow, thenHoldForDuration: 0.3)
+        chicken.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 1, thenDragTo: destination, withVelocity: .slow, thenHoldForDuration: 0.3)
         let garnish = app.staticTexts["Garnish"].firstMatch
         expectation(for: NSPredicate { _, _ in chicken.frame.minY > garnish.frame.maxY }, evaluatedWith: chicken)
         waitForExpectations(timeout: 5)
         capture(app, "Ingredient dragged into a new section")
         let mainPlus = app.buttons["addIngredient"]
-        garnish.press(forDuration: 1, thenDragTo: mainPlus.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        garnish.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 1, thenDragTo: mainPlus.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .withOffset(CGVector(dx: -90, dy: 0)), withVelocity: .slow, thenHoldForDuration: 0.3)
         let spice = app.staticTexts["Spice mix"].firstMatch
         expectation(for: NSPredicate { _, _ in garnish.frame.minY < spice.frame.minY }, evaluatedWith: garnish)
