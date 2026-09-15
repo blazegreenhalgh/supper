@@ -23,7 +23,7 @@ import XCTest
         replacement.tap(); replacement.typeText("sk-ui-test-replacement-key-1234567890")
         app.buttons["saveOpenAIKey"].tap()
         app.buttons["Remove key"].tap()
-        app.buttons["confirmRemoveOpenAIKey"].tap()
+        app.buttons["confirmRemoveOpenAIKey"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["Connect your OpenAI account"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Test connection"].exists)
     }
