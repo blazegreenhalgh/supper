@@ -10,7 +10,6 @@ struct SupperApp: App {
         WindowGroup {
             RootView()
                 .tint(.primary)
-                .toggleStyle(SupperToggleStyle())
                 .preferredColorScheme(uiTestColorScheme)
                 .environmentObject(store)
                 .task { await store.load() }

@@ -77,6 +77,7 @@ private struct RecipeSectionsEditor<Item: RecipeSectionItem, Row: View>: View {
                         .contentShape(.rect)
                         .onDrag { provider(section: section.title, itemID: nil) }
                         .accessibilityHint("Drag to reorder this section")
+                        .accessibilityIdentifier("recipeSection-" + (section.title.isEmpty ? defaultTitle : section.title))
                     Menu("Section options", systemImage: "ellipsis") {
                         Button("Rename section", systemImage: "pencil") {
                             renamedSection = section.title; sectionName = section.title; namingSection = true
@@ -106,7 +107,7 @@ private struct RecipeSectionsEditor<Item: RecipeSectionItem, Row: View>: View {
                 .onDrop(of: [.supperRecipeContent], isTargeted: target(section.id)) {
                     receive($0, section: section.title)
                 }
-                .accessibilityIdentifier("recipeSection-" + (section.title.isEmpty ? defaultTitle : section.title))
+                .accessibilityElement(children: .contain)
             }
         }
         Section {
@@ -355,7 +356,7 @@ struct DraftCollectionsEditor: View {
             ForEach(store.collections) { collection in
                 Toggle(collection.name, isOn: Binding(get: { selected.contains(collection.id) }, set: { on in
                     if on { selected.insert(collection.id) } else { selected.remove(collection.id) }
-                }))
+                })).tint(Color(uiColor: .systemBlue))
             }
         }.navigationTitle("Collections").navigationBarTitleDisplayMode(.inline)
     }

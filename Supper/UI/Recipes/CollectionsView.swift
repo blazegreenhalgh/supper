@@ -48,7 +48,7 @@ private struct CollectionEditorView: View {
     @State private var error: String?
     var body: some View {
         NavigationStack {
-            Form { TextField("Collection name", text: $collection.name); Toggle("Show on homepage", isOn: $collection.isOnHome) }
+            Form { TextField("Collection name", text: $collection.name); Toggle("Show on homepage", isOn: $collection.isOnHome).tint(Color(uiColor: .systemBlue)) }
                 .navigationTitle("Collection").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -70,7 +70,7 @@ struct CollectionMembershipView: View {
             List {
                 if store.collections.isEmpty { Text("Open Collections on the Recipes screen to create a collection.").foregroundStyle(.secondary) }
                 ForEach(store.collections) { collection in
-                    Toggle(collection.name, isOn: Binding(get: { selected.contains(collection.id) }, set: { on in if on { selected.insert(collection.id) } else { selected.remove(collection.id) } }))
+                    Toggle(collection.name, isOn: Binding(get: { selected.contains(collection.id) }, set: { on in if on { selected.insert(collection.id) } else { selected.remove(collection.id) } })).tint(Color(uiColor: .systemBlue))
                 }
             }.navigationTitle("Collections").navigationBarTitleDisplayMode(.inline)
                 .toolbar {

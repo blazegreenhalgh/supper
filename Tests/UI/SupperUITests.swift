@@ -521,14 +521,14 @@ import XCTest
     func testIngredientAndSectionDragsPersistOnSave() {
         let app = launch(); openRecipe(app)
         app.buttons["editRecipe"].tap(); app.buttons["editIngredients"].tap()
-        XCTAssertTrue(app.buttons["addRecipeSection"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["addRecipeSection"].waitForExistence(timeout: 5), app.debugDescription)
         app.buttons["addRecipeSection"].tap()
         let alert = app.alerts["New Section"]
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
         alert.textFields.firstMatch.tap(); alert.textFields.firstMatch.typeText("Garnish")
         alert.buttons["Save"].tap()
         let plus = app.buttons["addIngredient-Garnish"]
-        XCTAssertTrue(plus.waitForExistence(timeout: 5))
+        XCTAssertTrue(plus.waitForExistence(timeout: 5), app.debugDescription)
         let chicken = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "chicken breast")).firstMatch
         XCTAssertTrue(chicken.isHittable)
         let destination = plus.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))

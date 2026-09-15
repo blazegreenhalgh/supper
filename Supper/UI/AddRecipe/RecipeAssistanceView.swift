@@ -87,7 +87,7 @@ struct GroupRecoveryView: View {
                             Text(item.name)
                             Text("\(item.group.isEmpty ? "Main section" : item.group) → \(proposals[item.id] ?? "")").font(.caption).foregroundStyle(.secondary)
                         }
-                    }
+                    }.tint(Color(uiColor: .systemBlue))
                 }
             }
             .navigationTitle("Recover sections").navigationBarTitleDisplayMode(.inline)

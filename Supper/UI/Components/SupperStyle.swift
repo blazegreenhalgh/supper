@@ -104,10 +104,3 @@ extension View {
         modifier(RecipeZoomDestination(sourceID: sourceID, namespace: namespace))
     }
 }
-
-
-struct SupperToggleStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        Toggle(configuration).toggleStyle(.switch).tint(Color(uiColor: .systemBlue))
-    }
-}
