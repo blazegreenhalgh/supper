@@ -18,34 +18,28 @@ struct GroceryListView: View {
             if !shoppingRecipes.isEmpty {
                 Section {
                     DisclosureGroup(isExpanded: $showingRecipes) {
-                        VStack(spacing: 12) {
-                            ForEach(shoppingRecipes) { recipe in
-                                NavigationLink {
-                                    RecipeDetailView(recipeID: recipe.id)
-                                } label: {
-                                    shoppingRecipeLabel(recipe)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .contentShape(.rect)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.top, 12)
-                        .padding(.bottom, 4)
+                        EmptyView()
                     } label: {
                         HStack {
                             Text("Shopping for").font(.headline)
                             Spacer()
-                            Text("\(shoppingRecipes.count)")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 8)
+                            Text("\(shoppingRecipes.count)").font(.subheadline).foregroundStyle(.secondary)
+                        }.padding(.vertical, 8)
                     }
                     .tint(.primary)
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 12, trailing: 20))
+                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 4, trailing: 20))
+                    if showingRecipes {
+                        ForEach(shoppingRecipes) { recipe in
+                            NavigationLink { RecipeDetailView(recipeID: recipe.id) } label: {
+                                shoppingRecipeLabel(recipe)
+                            }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 20, bottom: 4, trailing: 20))
+                        }
+                    }
                 }
                 .listSectionSeparator(.hidden)
             }
@@ -63,10 +57,10 @@ struct GroceryListView: View {
                         }
                         .onDelete { delete($0, from: items) }
                     } header: {
-                        Text(aisle.rawValue)
+                        Text(aisle.rawValue.capitalized)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.primary)
-                            .textCase(.uppercase)
+                            .textCase(nil)
                     }
                     .listSectionSeparator(.hidden)
                 }
@@ -174,6 +168,7 @@ struct GroceryListView: View {
 private struct GroceryRow: View {
     @EnvironmentObject private var store: RecipeStore
     let item: GroceryItem
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var recipeNames: String {
         store.recipes.filter { item.sourceRecipeIDs.contains($0.id) }.map(\.title).joined(separator: ", ")
@@ -200,6 +195,7 @@ private struct GroceryRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: item.isChecked)
         .contextMenu {
             Menu("Shopping category") {
                 Button("Automatic") { category(nil) }

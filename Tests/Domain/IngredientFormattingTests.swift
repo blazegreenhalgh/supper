@@ -84,3 +84,17 @@ import Testing
     #expect(IngredientFormatting.applying(changes, selected: [a.id, b.id], to: [edited])[0] == edited)
     #expect(IngredientFormatting.applying(changes, selected: [a.id], to: []).isEmpty)
 }
+
+@Test func formattingReviewAcceptsManualNameAndAmountEdits() {
+    let original = Ingredient(name: "500g BEEF", group: "Filling", categoryOverride: .meatAndSeafood)
+    var change = IngredientFormatting.proposal(for: original)
+    change.proposed.name = "Lean beef mince"
+    change.proposed.quantity = "750"
+    change.proposed.unit = "g"
+    let applied = IngredientFormatting.applying([change], selected: [original.id], to: [original])
+    #expect(applied.first?.displayText == "750 g Lean beef mince")
+    #expect(applied.first?.id == original.id)
+    #expect(applied.first?.group == "Filling")
+    #expect(applied.first?.categoryOverride == .meatAndSeafood)
+    #expect(IngredientFormatting.applying([change], selected: [], to: [original]) == [original])
+}

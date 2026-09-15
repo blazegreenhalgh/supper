@@ -518,6 +518,47 @@ import XCTest
         XCTAssertFalse(app.staticTexts["Chicken with rice edited"].exists)
     }
 
+    func testIngredientAndSectionDragsPersistOnSave() {
+        let app = launch(); openRecipe(app)
+        app.buttons["editRecipe"].tap(); app.buttons["editIngredients"].tap()
+        XCTAssertTrue(app.buttons["addRecipeSection"].waitForExistence(timeout: 5), app.debugDescription)
+        app.buttons["addRecipeSection"].tap()
+        let alert = app.alerts["New Section"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        alert.textFields.firstMatch.tap(); alert.textFields.firstMatch.typeText("Garnish")
+        alert.buttons["Save"].tap()
+        let plus = app.buttons["addIngredient-Garnish"]
+        XCTAssertTrue(plus.waitForExistence(timeout: 5), app.debugDescription)
+        let chicken = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "chicken breast")).firstMatch
+        XCTAssertTrue(chicken.isHittable)
+        let garnish = app.staticTexts["recipeSection-Garnish"].firstMatch
+        XCTAssertTrue(garnish.isHittable)
+        chicken.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 1.1,
+            thenDragTo: garnish.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)),
+            withVelocity: .slow, thenHoldForDuration: 1)
+        capture(app, "Ingredient dropped on section heading")
+        let movedIngredient = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            chicken.frame.minY > garnish.frame.maxY
+        }, object: chicken)
+        XCTAssertEqual(XCTWaiter.wait(for: [movedIngredient], timeout: 5), .completed, app.debugDescription)
+        let mainHeading = app.staticTexts["recipeSection-Ingredients"].firstMatch
+        garnish.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 1.1,
+            thenDragTo: mainHeading.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)),
+            withVelocity: .slow, thenHoldForDuration: 1)
+        let spice = app.staticTexts["recipeSection-Spice mix"].firstMatch
+        capture(app, "Section dragged with all its ingredients")
+        let movedSection = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            garnish.frame.minY < spice.frame.minY
+        }, object: garnish)
+        XCTAssertEqual(XCTWaiter.wait(for: [movedSection], timeout: 5), .completed, app.debugDescription)
+        app.navigationBars.buttons.element(boundBy: 0).tap(); app.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["editRecipe"].waitForExistence(timeout: 5))
+        app.buttons["editRecipe"].tap(); app.buttons["editIngredients"].tap()
+        XCTAssertTrue(app.staticTexts["Garnish"].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertLessThan(garnish.frame.minY, chicken.frame.minY)
+        XCTAssertLessThan(chicken.frame.maxY, spice.frame.minY)
+    }
+
     func testFocusedIngredientEditorAndFullScreenMethod() {
         let app = launch(); openRecipe(app)
         app.buttons["editRecipe"].tap()

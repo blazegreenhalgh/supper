@@ -1,6 +1,7 @@
 import SwiftUI
 
 enum SupperStyle {
+    static let chipSpacing: CGFloat = 8
     static let canvas = Color("Canvas")
     static let surface = Color("Surface")
     static let subtle = Color("Subtle")

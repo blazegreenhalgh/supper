@@ -24,23 +24,25 @@ jobs:
         # Keychain tests need a signed simulator app with an application identity.
         # Ad-hoc signing needs no Apple credentials; shipping entitlements are unchanged.
         run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements build
+      - name: Section and collection UI regression tests
+        if: matrix.suite == 'editor'
+        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath SectionResults -only-testing:SupperUITests/SupperUITests/testIngredientAndSectionDragsPersistOnSave -only-testing:SupperUITests/SupperUITests/testRecipeCardPreviewActionsAndCollectionSubmenu CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
       - name: API key Keychain UI regression test
         if: matrix.suite == 'library'
-        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath DerivedData -resultBundlePath AIResults -only-testing:SupperUITests/SupperUITests/testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
+        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath AIResults -only-testing:SupperUITests/SupperUITests/testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
       - name: Native navigation and editor UI regression tests
         # Partition the existing suite so keyboard/drag failures and their screenshots
         # are available without waiting for the unrelated library/Keychain checks.
         run: |
           editor_tests=(
             testChatCollectionChangesApplyToDraftAndOnlyPersistOnSave
-            testRecipeCardPreviewActionsAndCollectionSubmenu
             testRecipeChatKeepsInputWhenReopenedAndCancelDoesNotSave
             testRecipeChatPreviewShowsRemovalsAndAppliesAndUndoesInPlace
             testRecipeChatRetainsSessionAcrossEditorsAndProtectsManualChanges
             testRecipeDragMovesBetweenHomeCollections
             testRecipePhotosPreviewOriginalAndApplyWithUndoAndUploadOption
           )
-          selection=(-skip-testing:SupperUITests/SupperUITests/testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests)
+          selection=(-skip-testing:SupperUITests/SupperUITests/testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests -skip-testing:SupperUITests/SupperUITests/testIngredientAndSectionDragsPersistOnSave -skip-testing:SupperUITests/SupperUITests/testRecipeCardPreviewActionsAndCollectionSubmenu)
           for test_name in "${editor_tests[@]}"; do
             if [ '${{ matrix.suite }}' = editor ]; then
               selection+=("-only-testing:SupperUITests/SupperUITests/$test_name")
@@ -48,24 +50,28 @@ jobs:
               selection+=("-skip-testing:SupperUITests/SupperUITests/$test_name")
             fi
           done
-          xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath DerivedData -resultBundlePath UIResults "${selection[@]}" CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
+          xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath UIResults "${selection[@]}" CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
       - name: Export navigation screenshots
         if: always()
         run: |
-          if [ -d UIResults.xcresult ]; then
-            xcrun xcresulttool export attachments --path UIResults.xcresult --output-path UITestAttachments
-            python3 - <<'PY'
+          for result in UIResults SectionResults; do
+            if [ -d "$result.xcresult" ]; then
+              xcrun xcresulttool export attachments --path "$result.xcresult" --output-path "UITestAttachments/$result"
+            fi
+          done
+          python3 - <<'PY'
           import base64, pathlib, subprocess
-          for index, path in enumerate(sorted(pathlib.Path('UITestAttachments').glob('*.png'))[:36]):
+          for index, path in enumerate(sorted(pathlib.Path('UITestAttachments').rglob('*.png'))[:36]):
               target = pathlib.Path('/tmp') / f'supper-ui-{index}.jpg'
               subprocess.run(['sips', '-Z', '700', '-s', 'format', 'jpeg', '-s', 'formatOptions', '50', str(path), '--out', str(target)], check=True, stdout=subprocess.DEVNULL)
               print('SUPPER_SCREENSHOT ' + str(index) + ' ' + base64.b64encode(target.read_bytes()).decode())
           PY
-          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ui-test-results-${{ matrix.suite }}
           path: |
+            SectionResults.xcresult
+            UITestAttachments
             AIResults.xcresult
             UIResults.xcresult

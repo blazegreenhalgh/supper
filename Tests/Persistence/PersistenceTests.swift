@@ -76,6 +76,45 @@ import Testing
         try store.deleteCollection(a.id)
         #expect(store.recipes.count == 1); #expect(store.recipes[0].collectionIDs == [b.id])
     }
+    @Test func allRecipesOrderingPersistsWithoutBecomingAMembership() async throws {
+        let store = try await makeStore()
+        let a = RecipeCollection(name: "Weeknights", isOnHome: true, order: 0)
+        let b = RecipeCollection(name: "Baking", isOnHome: true, order: 1)
+        try store.saveCollection(a); try store.saveCollection(b)
+        try store.reorderCollections([b.id, RecipeCollection.allRecipesID, a.id])
+        try store.refresh()
+        #expect(store.collectionSections.map(\.id) == [b.id, RecipeCollection.allRecipesID, a.id])
+        #expect(store.collections.map(\.id) == [b.id, a.id])
+        #expect(throws: (any Error).self) { try store.deleteCollection(RecipeCollection.allRecipesID) }
+        let recipe = Recipe(title: "Soup")
+        try store.addRecipe(recipe)
+        #expect(throws: (any Error).self) { try store.setMemberships([RecipeCollection.allRecipesID], recipeID: recipe.id) }
+        #expect(store.recipes.first?.collectionIDs.isEmpty == true)
+        try store.reorderCollections([RecipeCollection.allRecipesID, a.id, b.id])
+        try store.refresh()
+        #expect(store.collectionSections.first?.id == RecipeCollection.allRecipesID)
+    }
+
+    @Test func editorSectionMovesSurviveSavingAndReloading() async throws {
+        let store = try await makeStore()
+        let recipe = Recipe(title: "Pizza", ingredients: [
+            Ingredient(name: "Flour", quantity: "300", unit: "g", group: "Dough"),
+            Ingredient(name: "Tomato", quantity: "2", group: "Sauce")
+        ], steps: [RecipeStep(text: "Mix dough.", group: "Dough"), RecipeStep(text: "Cook sauce.", group: "Sauce")])
+        try store.addRecipe(recipe)
+        var draft = RecipeDraft(recipe: recipe)
+        let operation1 = draft.ingredientSections.moveSection("Sauce", before: "Dough")
+        #expect(operation1)
+        let operation2 = draft.methodSections.moveItem(recipe.steps[0].id, to: "Sauce")
+        #expect(operation2)
+        try store.updateRecipe(draft.applying(to: recipe)); try store.refresh()
+        let saved = try #require(store.recipes.first)
+        #expect(saved.ingredients.map(\.id) == recipe.ingredients.reversed().map(\.id))
+        #expect(saved.ingredients.last?.quantity == "300")
+        #expect(saved.steps.map(\.group) == ["Sauce", "Sauce"])
+        #expect(saved.steps.map(\.text) == ["Cook sauce.", "Mix dough."])
+    }
+
     @Test func chatCollectionsAndCollectionDropsPersistWithoutReplacingContent() async throws {
         let store = try await makeStore()
         let a = RecipeCollection(name: "A"), b = RecipeCollection(name: "B"), c = RecipeCollection(name: "C")

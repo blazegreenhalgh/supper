@@ -5,6 +5,7 @@ struct IngredientFormattingView: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var ingredients: [Ingredient]
     @State private var result: IngredientFormattingResult?
+    @State private var editedChanges: [IngredientFormatChange] = []
     @State private var selected: Set<UUID> = []
     @State private var completed = 0
     @State private var total = 0
@@ -21,21 +22,30 @@ struct IngredientFormattingView: View {
                         if result.changes.isEmpty {
                             Text("Your ingredients are already formatted.").foregroundStyle(.secondary)
                         }
-                        ForEach(result.changes) { change in
+                        ForEach($editedChanges) { $change in
                             Section {
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text("Original").font(.caption).foregroundStyle(.secondary)
                                     Text(change.original.displayText).font(.callout).foregroundStyle(.secondary)
                                 }
-                                Toggle(isOn: Binding(get: { selected.contains(change.id) }, set: { on in
+                                Toggle("Apply this change", isOn: Binding(get: { selected.contains(change.id) }, set: { on in
                                     if on { selected.insert(change.id) } else { selected.remove(change.id) }
-                                })) {
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Text("Formatted").font(.caption).foregroundStyle(.secondary)
-                                        IngredientLabel(ingredient: change.proposed)
-                                    }
-                                }
+                                }))
+                                .tint(Color(uiColor: .systemBlue))
                                 .accessibilityIdentifier("formatChange-" + change.id.uuidString)
+                                TextField("Ingredient name", text: $change.proposed.name, axis: .vertical)
+                                    .accessibilityIdentifier("formattedName-" + change.id.uuidString)
+                                LabeledContent("Quantity") {
+                                    TextField("Optional", text: $change.proposed.quantity)
+                                        .multilineTextAlignment(.trailing)
+                                        .accessibilityIdentifier("formattedQuantity-" + change.id.uuidString)
+                                }
+                                LabeledContent("Unit") {
+                                    TextField("Optional", text: $change.proposed.unit)
+                                        .multilineTextAlignment(.trailing)
+                                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                                        .accessibilityIdentifier("formattedUnit-" + change.id.uuidString)
+                                }
                             } footer: {
                                 if let notice = change.notice { Text(notice) }
                             }
@@ -57,10 +67,9 @@ struct IngredientFormattingView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Apply") {
-                        guard let result else { return }
-                        ingredients = IngredientFormatting.applying(result.changes, selected: selected, to: ingredients)
+                        ingredients = IngredientFormatting.applying(editedChanges, selected: selected, to: ingredients)
                         dismiss()
-                    }.disabled(result == nil || selected.isEmpty).accessibilityIdentifier("applyIngredientFormatting")
+                    }.disabled(result == nil || selected.isEmpty || editedChanges.contains { selected.contains($0.id) && $0.proposed.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }).accessibilityIdentifier("applyIngredientFormatting")
                 }
             }
             // SwiftUI cancels this task if the sheet is dismissed, including a swipe down.
@@ -71,6 +80,7 @@ struct IngredientFormattingView: View {
                     }
                     try Task.checkCancellation()
                     result = value
+                    editedChanges = value.changes
                     selected = Set(value.changes.filter { $0.original != $0.proposed }.map(\.id))
                 } catch {
                     if !(error is CancellationError) { self.error = "\(error.localizedDescription) Cancel to keep editing, or open Auto format to try again." }

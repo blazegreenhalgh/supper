@@ -46,6 +46,8 @@ public struct RecipeAssistantPatch: Codable, Sendable {
               servings.map({ (1...1000).contains($0) }) ?? true,
               durationMinutes.map({ (1...10080).contains($0) }) ?? true else { throw invalid() }
         var result = original
+        var ingredientRows = original.ingredients
+        var methodRows = original.steps
         if let title {
             guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, title.count <= 200 else { throw invalid() }
             result.title = title
@@ -60,19 +62,19 @@ public struct RecipeAssistantPatch: Codable, Sendable {
             if edit.operation != .remove, edit.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { throw invalid() }
             if edit.operation == .add {
                 guard edit.index == -1 else { throw invalid() }
-                result.ingredients.append(Ingredient(name: edit.name, quantity: edit.quantity, unit: edit.unit, group: edit.group))
+                ingredientRows.append(Ingredient(name: edit.name, quantity: edit.quantity, unit: edit.unit, group: edit.group))
             } else {
                 guard original.ingredients.indices.contains(edit.index), ingredientIndices.insert(edit.index).inserted else { throw invalid() }
                 if edit.operation == .remove { removedIngredients.insert(edit.index) }
                 else {
-                    result.ingredients[edit.index].name = edit.name
-                    result.ingredients[edit.index].quantity = edit.quantity
-                    result.ingredients[edit.index].unit = edit.unit
-                    result.ingredients[edit.index].group = edit.group
+                    ingredientRows[edit.index].name = edit.name
+                    ingredientRows[edit.index].quantity = edit.quantity
+                    ingredientRows[edit.index].unit = edit.unit
+                    ingredientRows[edit.index].group = edit.group
                 }
             }
         }
-        result.ingredients = result.ingredients.enumerated().filter { !removedIngredients.contains($0.offset) }.map(\.element)
+        ingredientRows = ingredientRows.enumerated().filter { !removedIngredients.contains($0.offset) }.map(\.element)
         var stepIndices = Set<Int>()
         var removedSteps = Set<Int>()
         for edit in steps {
@@ -80,16 +82,18 @@ public struct RecipeAssistantPatch: Codable, Sendable {
             if edit.operation != .remove, edit.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { throw invalid() }
             if edit.operation == .add {
                 guard edit.index == -1 else { throw invalid() }
-                result.steps.append(RecipeStep(text: edit.text, group: edit.group))
+                methodRows.append(RecipeStep(text: edit.text, group: edit.group))
             } else {
                 guard original.steps.indices.contains(edit.index), stepIndices.insert(edit.index).inserted else { throw invalid() }
                 if edit.operation == .remove { removedSteps.insert(edit.index) }
-                else { result.steps[edit.index].text = edit.text; result.steps[edit.index].group = edit.group }
+                else { methodRows[edit.index].text = edit.text; methodRows[edit.index].group = edit.group }
             }
         }
-        result.steps = result.steps.enumerated().filter { !removedSteps.contains($0.offset) }.map(\.element)
-        for index in result.ingredients.indices { result.ingredients[index].order = index }
-        for index in result.steps.indices { result.steps[index].order = index }
+        methodRows = methodRows.enumerated().filter { !removedSteps.contains($0.offset) }.map(\.element)
+        for index in ingredientRows.indices { ingredientRows[index].order = index }
+        for index in methodRows.indices { methodRows[index].order = index }
+        result.ingredients = ingredientRows
+        result.steps = methodRows
         return result
     }
 }

@@ -31,13 +31,15 @@ struct RecipeLibraryView: View {
     private var libraryContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                if !isSearch {
-                    Button { showingDiscovery = true } label: {
-                        Label("What are you craving?", systemImage: "sparkles").frame(maxWidth: .infinity)
-                    }.supperGlassButton().controlSize(.large).padding(.horizontal, 20)
-                        .accessibilityIdentifier("openRecipeDiscovery")
+                VStack(spacing: SupperStyle.chipSpacing) {
+                    if !isSearch {
+                        Button { showingDiscovery = true } label: {
+                            Label("What are you craving?", systemImage: "sparkles").frame(maxWidth: .infinity)
+                        }.supperGlassButton().controlSize(.large).padding(.horizontal, 20)
+                            .accessibilityIdentifier("openRecipeDiscovery")
+                    }
+                    RecipeFilterChips(filter: $filter)
                 }
-                RecipeFilterChips(filter: $filter)
                 HStack {
                     Text("\(filteredRecipes.count) recipes").font(.subheadline).foregroundStyle(.secondary)
                         .contentTransition(.numericText())
@@ -60,47 +62,57 @@ struct RecipeLibraryView: View {
                     }
                 } else {
                     if !filter.isActive && !isSearch {
-                        ForEach(store.collections.filter(\.isOnHome)) { collection in
-                            let recipes = store.recipes.filter { $0.collectionIDs.contains(collection.id) }
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Button { filter.collectionIDs = [collection.id] } label: {
-                                        HStack { Text(collection.name).font(.title2.bold()); Spacer(); Image(systemName: "arrow.right").font(.subheadline) }
-                                    }.buttonStyle(.plain).padding(.horizontal, 20)
-                                    if recipes.isEmpty {
-                                        Label("Drop a recipe here", systemImage: "tray.and.arrow.down")
-                                            .font(.subheadline).foregroundStyle(.secondary)
-                                            .frame(maxWidth: .infinity, minHeight: 64).padding(.horizontal, 20)
-                                    } else {
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        LazyHStack(alignment: .top, spacing: 16) {
-                                            ForEach(recipes) { recipe in
-                                                recipeLink(recipe, section: collection.id.uuidString)
-                                                    .containerRelativeFrame(.horizontal, count: columnCount, spacing: 16)
-                                            }
-                                        }
-                                    }
-                                    .contentMargins(.horizontal, 20, for: .scrollContent)
-                                    }
-                                }
-                                .padding(.vertical, 6)
-                                .background(dropTarget == collection.id ? Color.accentColor.opacity(0.1) : .clear, in: .rect(cornerRadius: 20))
-                                .contentShape(.rect)
-                                .onDrop(of: [.supperRecipeCard], isTargeted: Binding(get: { dropTarget == collection.id }, set: { targeted in
-                                    if targeted { dropTarget = collection.id }
-                                    else if dropTarget == collection.id { dropTarget = nil }
-                                })) { providers in receiveDrop(providers, into: collection.id) }
-                                .accessibilityElement(children: .contain).accessibilityIdentifier("collectionDrop-" + collection.name)
+                        ForEach(store.collectionSections.filter(\.isOnHome)) { collection in
+                            if collection.id == RecipeCollection.allRecipesID { allRecipesGrid }
+                            else { collectionCarousel(collection) }
                         }
-                    }
-                    Text(filter.isActive ? "Results" : "All recipes").font(.title2.bold()).padding(.horizontal, 20)
-                        .contentTransition(.opacity)
-                    LazyVGrid(columns: columns, alignment: .leading, spacing: 24) {
-                        ForEach(filteredRecipes) { recipeLink($0) }
-                    }.padding(.horizontal, 20)
+                    } else { allRecipesGrid }
                 }
             }.padding(.top, 12).padding(.bottom, 32)
                 .animation(reduceMotion ? nil : .smooth(duration: 0.25), value: filter)
         }
+    }
+
+    private var allRecipesGrid: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            Text(filter.isActive ? "Results" : "All recipes").font(.title2.bold()).padding(.horizontal, 20)
+                .contentTransition(.opacity)
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 24) {
+                ForEach(filteredRecipes) { recipeLink($0) }
+            }.padding(.horizontal, 20)
+        }
+    }
+
+    private func collectionCarousel(_ collection: RecipeCollection) -> some View {
+        let recipes = store.recipes.filter { $0.collectionIDs.contains(collection.id) }
+        return VStack(alignment: .leading, spacing: 12) {
+            Button { filter.collectionIDs = [collection.id] } label: {
+                HStack { Text(collection.name).font(.title2.bold()); Spacer(); Image(systemName: "arrow.right").font(.subheadline) }
+            }.buttonStyle(.plain).padding(.horizontal, 20)
+            if recipes.isEmpty {
+                Label("Drop a recipe here", systemImage: "tray.and.arrow.down")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 64).padding(.horizontal, 20)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(alignment: .top, spacing: 16) {
+                        ForEach(recipes) { recipe in
+                            recipeLink(recipe, section: collection.id.uuidString)
+                                .containerRelativeFrame(.horizontal, count: columnCount, spacing: 16)
+                        }
+                    }
+                }
+                .contentMargins(.horizontal, 20, for: .scrollContent)
+            }
+        }
+        .padding(.vertical, 6)
+        .background(dropTarget == collection.id ? Color.accentColor.opacity(0.1) : .clear, in: .rect(cornerRadius: 20))
+        .contentShape(.rect)
+        .onDrop(of: [.supperRecipeCard], isTargeted: Binding(get: { dropTarget == collection.id }, set: { targeted in
+            if targeted { dropTarget = collection.id }
+            else if dropTarget == collection.id { dropTarget = nil }
+        })) { providers in receiveDrop(providers, into: collection.id) }
+        .accessibilityElement(children: .contain).accessibilityIdentifier("collectionDrop-" + collection.name)
     }
 
     var body: some View {
@@ -120,7 +132,7 @@ struct RecipeLibraryView: View {
             }
             if !isSearch {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button("Edit") { showingCollections = true }.accessibilityIdentifier("editCollections")
+                    Button("Collections", systemImage: "rectangle.stack") { showingCollections = true }.accessibilityIdentifier("editCollections")
                         .accessibilityHint("Create collections and arrange homepage sections")
                     Button("Add recipe", systemImage: "plus") { showingAddRecipe = true }.accessibilityIdentifier("addRecipe")
                 }
