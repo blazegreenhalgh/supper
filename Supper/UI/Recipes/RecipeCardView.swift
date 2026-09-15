@@ -28,21 +28,30 @@ struct RecipeCardView: View {
             Text(recipe.title)
                 .font(.headline)
                 .foregroundStyle(.primary)
-                .lineLimit(2)
+                .lineLimit(2, reservesSpace: true)
 
-            HStack(spacing: 7) {
-                if let duration = recipe.durationMinutes {
-                    Label("\(duration) min", systemImage: "clock")
+            // Reserve one caption line even for recipes saved with only a title.
+            Text(" ")
+                .hidden()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(alignment: .leading) {
+                    HStack(spacing: 7) {
+                        if let duration = recipe.durationMinutes {
+                            Label("\(duration) min", systemImage: "clock")
+                        }
+                        if let firstTag = recipe.tags.first {
+                            Text(firstTag)
+                        }
+                    }
                 }
-                if let firstTag = recipe.tags.first {
-                    Text(firstTag)
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+        // A horizontal lazy row can propose its first card's height to siblings.
+        // Measure at the available width and natural height so covers stay square.
+        .fixedSize(horizontal: false, vertical: true)
         .contentShape(.rect)
         .accessibilityElement(children: .combine)
     }

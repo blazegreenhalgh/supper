@@ -15,7 +15,8 @@ struct RecipeLibraryView: View {
     @State private var showingSearchAssistant = false
     @State private var showingDiscovery = false
     @StateObject private var discovery = RecipeDiscoveryModel()
-    private var columns: [GridItem] { Array(repeating: GridItem(.flexible(minimum: 0), spacing: 16, alignment: .top), count: dynamicTypeSize.isAccessibilitySize ? 1 : 2) }
+    private var columnCount: Int { dynamicTypeSize.isAccessibilitySize ? 1 : 2 }
+    private var columns: [GridItem] { Array(repeating: GridItem(.flexible(minimum: 0), spacing: 16, alignment: .top), count: columnCount) }
     private var filteredRecipes: [Recipe] { store.recipes.filter { filter.matches($0, collections: store.collections, memberID: store.currentMemberID, members: store.members) } }
     private var allTags: [String] { Array(Set(store.recipes.flatMap(\.tags))).sorted() }
     var body: some View {
@@ -59,9 +60,13 @@ struct RecipeLibraryView: View {
                                     }.buttonStyle(.plain).padding(.horizontal, 20)
                                     ScrollView(.horizontal, showsIndicators: false) {
                                         LazyHStack(alignment: .top, spacing: 16) {
-                                            ForEach(recipes) { recipe in recipeLink(recipe, section: collection.id.uuidString).frame(width: dynamicTypeSize.isAccessibilitySize ? 280 : 174) }
-                                        }.padding(.horizontal, 20)
+                                            ForEach(recipes) { recipe in
+                                                recipeLink(recipe, section: collection.id.uuidString)
+                                                    .containerRelativeFrame(.horizontal, count: columnCount, spacing: 16)
+                                            }
+                                        }
                                     }
+                                    .contentMargins(.horizontal, 20, for: .scrollContent)
                                 }
                             }
                         }
