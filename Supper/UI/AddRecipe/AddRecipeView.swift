@@ -14,7 +14,6 @@ struct AddRecipeView: View {
     @State private var showingURLImport = false
     @State private var showingAssistant = false
     @State private var chatExpanded = false
-    @State private var chatHeight: CGFloat = 56
     @State private var showingCover = false
     @StateObject private var recipeChat = RecipeChatSession()
     @State private var errorMessage: String?
@@ -31,17 +30,13 @@ struct AddRecipeView: View {
     var body: some View {
         GeometryReader { geometry in
             editor
-                .contentMargins(.bottom, chatHeight, for: .scrollContent)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    // Use the system's keyboard-aware bottom anchor without adding
-                    // a filled footer or taking space away from the editor.
-                    Color.clear.frame(height: 0).overlay(alignment: .bottom) {
-                        RecipeEditorChatView(draft: assistantDraft, session: recipeChat, expanded: $chatExpanded)
-                            .frame(height: chatExpanded ? min(380, max(180, geometry.size.height * 0.48)) : 56)
-                            .frame(maxWidth: chatExpanded ? 680 : 420)
-                            .padding(.horizontal, chatExpanded ? 12 : 24)
-                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chatHeight = $0 }
-                    }
+                    // The inset follows the keyboard and reserves scroll space.
+                    // Only the chat has a material; there is no filled footer.
+                    RecipeEditorChatView(draft: assistantDraft, session: recipeChat, expanded: $chatExpanded)
+                        .frame(height: chatExpanded ? min(380, max(180, geometry.size.height * 0.48)) : 56)
+                        .frame(maxWidth: chatExpanded ? 680 : 420)
+                        .padding(.horizontal, chatExpanded ? 12 : 24)
                 }
         }
         .onAppear {
