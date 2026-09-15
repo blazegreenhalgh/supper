@@ -79,6 +79,34 @@ private let naanSource = RecipeAssistantSource(title: "Naan", url: URL(string: "
     #expect(throws: (any Error).self) { try proposal.applying(to: newer) }
 }
 
+@Test func recipePreviewDistinguishesDuplicateRowsAndPreservesRemovedContent() throws {
+    let first = Ingredient(name: "Flour", quantity: "300", unit: "g", group: "Dough")
+    let second = Ingredient(name: "Flour", quantity: "1", unit: "tbsp", group: "To dust")
+    let removedStep = RecipeStep(text: "Dust the surface.", group: "Shaping")
+    let base = RecipeDraft(title: "Naan", servings: 2, ingredients: [first, second], steps: [removedStep])
+    let suggested = try RecipeAssistantPatch(servings: 4, ingredients: [
+        .init(operation: .update, index: 0, name: "Flour", quantity: "400", unit: "g", group: "Dough"),
+        .init(operation: .remove, index: 1),
+        .init(operation: .add, name: "Oil", quantity: "1", unit: "tsp")
+    ], steps: [.init(operation: .remove, index: 0), .init(operation: .add, text: "Oil the surface.")]).applying(to: base)
+    let proposal = RecipeAssistantProposal(base: base, suggested: suggested, sources: [naanSource])
+    let changes = proposal.changes
+    #expect(changes.filter { $0.kind == .added }.count == 2)
+    #expect(changes.filter { $0.kind == .changed }.count == 2)
+    #expect(changes.filter { $0.kind == .removed }.count == 2)
+    let removed = try #require(changes.first { $0.id == second.id.uuidString })
+    #expect(removed.kind == .removed)
+    #expect(removed.before == "To dust · 1 tbsp Flour")
+    #expect(removed.after == nil)
+    #expect(changes.first { $0.id == first.id.uuidString }?.after == "Dough · 400 g Flour")
+    #expect(changes.first { $0.id == removedStep.id.uuidString }?.before == "Shaping · Dust the surface.")
+    // Preview is read-only; its clean recipe uses the exact apply result, including sources.
+    let preview = try proposal.applying(to: proposal.base)
+    #expect(base.ingredients == [first, second])
+    #expect(preview.ingredients.map(\.name) == ["Flour", "Oil"])
+    #expect(preview.notes.contains(naanSource.url.absoluteString))
+}
+
 @Test func methodGroupsRoundTripAndPlainLegacyStepsRemainReadable() {
     let step = RecipeStep(text: "Mix.\n\nRest for 10 minutes.", order: 2, group: "Naan bread")
     #expect(RecipeStep(id: step.id, storedText: step.storedText, order: step.order) == step)

@@ -102,10 +102,12 @@ public struct RecipeAssistantSource: Identifiable, Hashable, Sendable {
 }
 
 public struct RecipeAssistantChange: Identifiable, Sendable {
+    public enum Kind: String, Sendable { case added = "Added", changed = "Changed", removed = "Removed" }
     public let id: String
     public let label: String
     public let before: String?
     public let after: String?
+    public var kind: Kind { before == nil ? .added : (after == nil ? .removed : .changed) }
 }
 
 public struct RecipeAssistantProposal: Identifiable, Sendable {

@@ -19,22 +19,25 @@ struct RecipeChatMessage: Identifiable {
     @Published private(set) var progress = ""
     @Published private(set) var error: String?
     @Published private(set) var retryRequest: String?
+    @Published var editingField: String?
     private var task: Task<Void, Never>?
     private var requestID: UUID?
     private var activeRequest = ""
 
-    func reconcile(with current: RecipeDraft) {
-        if let pending, pending.base != current {
-            self.pending = nil
-            messages.append(RecipeChatMessage(text: "The recipe has changed. Your next request will use the latest draft."))
-        }
+    func applyBlocker(for proposal: RecipeAssistantProposal, draft: RecipeDraft) -> String? {
+        if busy { return "Wait for the current request to finish." }
+        if pending?.id != proposal.id { return "A newer suggestion is available. Reopen the preview to review it." }
+        if let editingField { return "Finish your \(editingField) edit before applying this suggestion." }
+        if proposal.base != draft { return "Your recipe has changed. Send another message to update this suggestion using your latest edits." }
+        return nil
     }
 
     func send(draft: RecipeDraft) {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !busy, !text.isEmpty, text.count <= 1200 else { return }
-        reconcile(with: draft)
-        let previous = pending
+        // A stale suggestion stays available for review, but never becomes the
+        // starting point of another request after the user edits the recipe.
+        let previous = pending.flatMap { $0.base == draft ? $0 : nil }
         let working = previous?.suggested ?? draft
         let history = messages.suffix(6).map { ($0.isUser ? "You: " : "Assistant: ") + String($0.text.prefix(400)) }.joined(separator: "\n")
         messages.append(RecipeChatMessage(text: text, isUser: true))
@@ -69,8 +72,8 @@ struct RecipeChatMessage: Identifiable {
         messages.append(RecipeChatMessage(text: "Stopped. Your recipe hasn’t changed."))
     }
 
-    func apply(to draft: inout RecipeDraft) {
-        guard !busy, let pending else { return }
+    func apply(to draft: inout RecipeDraft, proposalID: UUID) {
+        guard let pending, pending.id == proposalID, applyBlocker(for: pending, draft: draft) == nil else { return }
         do {
             let changed = try pending.applying(to: draft)
             undoStack.append(RecipeAssistantUndo(before: draft, after: changed))
@@ -86,29 +89,52 @@ struct RecipeChatMessage: Identifiable {
     }
 
     func undo(in draft: inout RecipeDraft) {
-        guard !busy, let last = undoStack.last else { return }
+        guard !busy, editingField == nil, let last = undoStack.last else { return }
         do {
             draft = try last.restoring(draft); undoStack.removeLast(); pending = nil; error = nil
             messages.append(RecipeChatMessage(text: "Undid the last AI edit."))
         } catch { self.error = error.localizedDescription }
     }
+
+    #if DEBUG
+    /// Deterministic UI coverage without a key, network request or production fallback.
+    func loadUITestProposal(draft: RecipeDraft) {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("--ui-testing"), arguments.contains("--recipe-chat-ui-testing"), messages.isEmpty else { return }
+        var suggested = draft
+        suggested.servings = 6
+        if !suggested.ingredients.isEmpty { suggested.ingredients[0].quantity = "750" }
+        if suggested.ingredients.count > 1 { suggested.ingredients.removeLast() }
+        suggested.ingredients.append(Ingredient(name: "Lime wedges", quantity: "2", group: "To serve"))
+        if !suggested.steps.isEmpty { suggested.steps.removeLast() }
+        suggested.steps.append(RecipeStep(text: "Serve with lime wedges.", group: "To serve"))
+        pending = RecipeAssistantProposal(base: draft, suggested: suggested, sources: [
+            RecipeAssistantSource(title: "UI test source", url: URL(string: "https://example.com/recipe-ui-fixture")!)
+        ])
+        messages.append(RecipeChatMessage(text: "Review the suggested ingredient and method changes."))
+    }
+    #endif
 }
 
 struct RecipeEditorChatView: View {
-    @Environment(\.dismiss) private var dismiss
     @Binding var draft: RecipeDraft
     @ObservedObject var session: RecipeChatSession
+    @Binding var expanded: Bool
+    let close: () -> Void
     @FocusState private var inputFocused: Bool
-    @State private var reviewing = false
+    @State private var reviewing: RecipeAssistantProposal?
     @ObservedObject private var aiSettings = OpenAISettings.shared
     @State private var showingAISettings = false
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            header
+            if expanded {
+            Divider()
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 22) {
-                        introduction
+                        if session.messages.isEmpty { introduction }
                         ForEach(session.messages) { message in messageView(message) }
                         if session.busy {
                             ProgressView(session.progress).font(.subheadline)
@@ -125,47 +151,65 @@ struct RecipeEditorChatView: View {
                             }.accessibilityIdentifier("recipeChatError")
                         }
                         if let proposal = session.pending { proposalCard(proposal) }
-                        if let last = session.undoStack.last, last.after == draft, !session.busy {
-                            Button("Undo last AI edit", systemImage: "arrow.uturn.backward") {
-                                session.undo(in: &draft)
-                            }.font(.subheadline).accessibilityIdentifier("undoRecipeAIEdit")
-                        }
                         Color.clear.frame(height: 1).id("chatBottom")
-                    }.padding(20).frame(maxWidth: 680).frame(maxWidth: .infinity)
+                    }.padding(16).frame(maxWidth: 680).frame(maxWidth: .infinity)
                 }
+                .accessibilityIdentifier("recipeChatMessages")
                 .scrollDismissesKeyboard(.interactively)
                 .onChange(of: session.messages.count) { _, _ in proxy.scrollTo("chatBottom", anchor: .bottom) }
                 .onChange(of: session.busy) { _, _ in proxy.scrollTo("chatBottom", anchor: .bottom) }
             }
-            .background(SupperStyle.canvas)
-            .navigationTitle("Ask AI").navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { session.stop(); dismiss() }.accessibilityIdentifier("closeRecipeChat")
-                }
+            composer
             }
-            .safeAreaInset(edge: .bottom) { composer }
-            .onAppear { session.reconcile(with: draft) }
-            .onDisappear { session.stop() }
-            .sheet(isPresented: $showingAISettings) {
-                NavigationStack { AISettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingAISettings = false } } } }
-            }
-            .sheet(isPresented: $reviewing) {
-                if let proposal = session.pending {
-                    RecipeAssistantReviewView(proposal: proposal, canApply: !session.busy && proposal.base == draft) {
-                        session.apply(to: &draft); reviewing = false
-                    }
-                }
+        }
+        .background(.regularMaterial)
+        .overlay(alignment: .top) { Divider() }
+        .sheet(isPresented: $showingAISettings) {
+            NavigationStack { AISettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingAISettings = false } } } }
+        }
+        .sheet(item: $reviewing) { proposal in
+            RecipeAssistantReviewView(proposal: proposal, blocker: session.applyBlocker(for: proposal, draft: draft)) {
+                session.apply(to: &draft, proposalID: proposal.id); reviewing = nil
             }
         }
     }
 
+    private var header: some View {
+        HStack(spacing: 8) {
+            Button {
+                inputFocused = false; expanded.toggle()
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Ask AI").font(.subheadline.weight(.semibold))
+                        if session.busy { Text("Working…").font(.caption2).foregroundStyle(.secondary) }
+                        else if let pending = session.pending { Text("\(pending.changes.count) suggested changes").font(.caption2).foregroundStyle(.secondary) }
+                    }
+                    Image(systemName: expanded ? "chevron.down" : "chevron.up").font(.caption)
+                }.frame(minHeight: 44)
+            }.buttonStyle(.plain)
+                .accessibilityLabel(expanded ? "Minimise Ask AI" : "Expand Ask AI")
+                .accessibilityIdentifier("toggleRecipeChat")
+            Spacer(minLength: 0)
+            if let proposal = session.pending {
+                Button("Preview") { inputFocused = false; reviewing = proposal }
+                    .supperGlassButton().accessibilityIdentifier("reviewRecipeAIEdit")
+            } else if let last = session.undoStack.last, last.after == draft, !session.busy {
+                Button("Undo") { session.undo(in: &draft) }
+                    .supperGlassButton().disabled(session.editingField != nil)
+                    .accessibilityLabel("Undo last AI edit").accessibilityIdentifier("undoRecipeAIEdit")
+            }
+            Button("Close chat", systemImage: "xmark") { inputFocused = false; close() }
+                .labelStyle(.iconOnly).frame(width: 44, height: 44)
+                .accessibilityIdentifier("closeRecipeChat")
+        }.padding(.horizontal, 16).padding(.vertical, 7)
+    }
+
     private var introduction: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Label(draft.title.isEmpty ? "Build your recipe" : draft.title, systemImage: "sparkles")
-                .font(.title3.weight(.semibold))
             if aiSettings.isConfigured {
-                Text("Tell me what to add or change. I’ll consult online recipes and let you review the changes first.")
+                Text("Ask me to add or change something. I’ll find online sources and suggest edits for you to preview.")
                     .font(.subheadline).foregroundStyle(.secondary)
                 if session.messages.isEmpty {
                     ForEach(suggestions, id: \.self) { text in
@@ -174,7 +218,7 @@ struct RecipeEditorChatView: View {
                     }
                 }
             } else {
-                Text("Connect your OpenAI API key to search published recipes and edit this draft. Your request and relevant recipe content will be sent to OpenAI. Manual editing and URL import still work without a key.")
+                Text("Connect your OpenAI API key to search published recipes and suggest edits. Requests and relevant recipe content are sent to OpenAI.")
                     .font(.subheadline).foregroundStyle(.secondary)
                 Button("Set up OpenAI", systemImage: "key") { showingAISettings = true }
             }
@@ -214,11 +258,14 @@ struct RecipeEditorChatView: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Suggested changes", systemImage: "square.and.pencil").font(.headline)
             Text("\(proposal.changes.count) changes ready to review").font(.subheadline).foregroundStyle(.secondary)
-            if session.busy { Text("Refining this suggestion…").font(.caption).foregroundStyle(.secondary) }
-            ViewThatFits(in: .horizontal) {
-                HStack { proposalActions }
-                VStack(alignment: .leading) { proposalActions }
+            if let blocker = session.applyBlocker(for: proposal, draft: draft) {
+                Text(blocker).font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("recipeAIApplyBlocker")
             }
+            Button("Apply to draft") { session.apply(to: &draft, proposalID: proposal.id) }
+                .supperGlassButton(prominent: true)
+                .disabled(session.applyBlocker(for: proposal, draft: draft) != nil)
+                .accessibilityIdentifier("applyRecipeAIEdit")
             Button("Discard suggestion", role: .destructive) { session.discard() }
                 .font(.caption).disabled(session.busy).accessibilityIdentifier("discardRecipeAIEdit")
         }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
@@ -226,20 +273,12 @@ struct RecipeEditorChatView: View {
             .accessibilityIdentifier("recipeAIProposal")
     }
 
-    @ViewBuilder private var proposalActions: some View {
-        Button("Review changes") { reviewing = true }
-            .supperGlassButton().disabled(session.busy).accessibilityIdentifier("reviewRecipeAIEdit")
-        Button("Apply") { session.apply(to: &draft) }
-            .supperGlassButton(prominent: true).disabled(session.busy || session.pending?.base != draft)
-            .accessibilityIdentifier("applyRecipeAIEdit")
-    }
-
     private var composer: some View {
         VStack(spacing: 8) {
             if session.input.count > 1200 { Text("Keep your request under 1,200 characters.").font(.caption).foregroundStyle(.secondary) }
             HStack(alignment: .bottom, spacing: 10) {
-                TextField(session.pending == nil ? "Ask about this recipe…" : "Refine this suggestion…", text: $session.input, axis: .vertical)
-                    .lineLimit(1...5).padding(.horizontal, 16).padding(.vertical, 13)
+                TextField(session.pending?.base == draft ? "Refine this suggestion…" : "Ask about this recipe…", text: $session.input, axis: .vertical)
+                    .lineLimit(1...3).padding(.horizontal, 16).padding(.vertical, 10)
                     .supperGlassSurface().focused($inputFocused)
                     .accessibilityIdentifier("recipeChatInput")
                 if session.busy {
@@ -252,46 +291,8 @@ struct RecipeEditorChatView: View {
                         .accessibilityIdentifier("sendRecipeChat")
                 }
             }
-            if session.messages.isEmpty {
-                Text("Type or use your keyboard’s dictation microphone.").font(.caption2).foregroundStyle(.secondary)
-            }
         }.padding(.horizontal, 16).padding(.vertical, 10)
     }
 
     private func send() { inputFocused = false; session.send(draft: draft) }
-}
-
-private struct RecipeAssistantReviewView: View {
-    @Environment(\.dismiss) private var dismiss
-    let proposal: RecipeAssistantProposal
-    let canApply: Bool
-    let apply: () -> Void
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    ForEach(proposal.changes) { change in
-                        VStack(alignment: .leading, spacing: 7) {
-                            Text(change.label).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                            if let before = change.before {
-                                Label { Text(before).strikethrough() } icon: { Image(systemName: "minus.circle") }
-                                    .foregroundStyle(.secondary).accessibilityLabel("Before: \(before)")
-                            }
-                            if let after = change.after {
-                                Label { Text(after) } icon: { Image(systemName: "plus.circle") }
-                                    .accessibilityLabel("After: \(after)")
-                            }
-                        }.padding(.vertical, 5)
-                    }
-                } footer: { Text("Applies to your draft. Save the recipe to keep these changes. Source links are added to Notes.") }
-                Section("Online sources") {
-                    ForEach(proposal.sources) { source in Link(source.title, destination: source.url) }
-                }
-            }.navigationTitle("Review Changes").navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Back") { dismiss() } }
-                    ToolbarItem(placement: .confirmationAction) { Button("Apply", action: apply).disabled(!canApply) }
-                }
-        }
-    }
 }

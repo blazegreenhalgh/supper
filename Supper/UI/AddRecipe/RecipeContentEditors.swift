@@ -4,6 +4,7 @@ import SwiftUI
 struct IngredientListEditor: View {
     @Binding var ingredients: [Ingredient]
     let sourceURL: URL?
+    var onEditingChange: (Bool) -> Void = { _ in }
     @State private var editing: Ingredient?
     @State private var recoveringGroups = false
     @State private var formatting = false
@@ -52,7 +53,8 @@ struct IngredientListEditor: View {
         .scrollContentBackground(.hidden).background(SupperStyle.canvas)
         .navigationTitle("Ingredients").navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .primaryAction) { EditButton().disabled(ingredients.isEmpty) } }
-        .sheet(item: $editing) { ingredient in
+        .onChange(of: editing?.id) { _, value in onEditingChange(value != nil) }
+        .navigationDestination(item: $editing) { ingredient in
             IngredientEditor(ingredient: ingredient, isNew: !ingredients.contains { $0.id == ingredient.id }) { value in
                 if let index = ingredients.firstIndex(where: { $0.id == value.id }) { ingredients[index] = value }
                 else { ingredients.append(value) }
@@ -69,49 +71,47 @@ private struct IngredientEditor: View {
     let isNew: Bool
     let apply: (Ingredient) -> Void
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Ingredient name") {
-                    TextField("e.g. olive oil", text: $ingredient.name, axis: .vertical)
-                        .accessibilityIdentifier("ingredientName")
-                }
-                Section {
-                    LabeledContent("Quantity") {
-                        TextField("e.g. 1½", text: $ingredient.quantity).multilineTextAlignment(.trailing)
-                            .accessibilityIdentifier("ingredientQuantity")
-                    }
-                    LabeledContent("Unit") {
-                        TextField("e.g. tbsp", text: $ingredient.unit).multilineTextAlignment(.trailing)
-                            .textInputAutocapitalization(.never).autocorrectionDisabled()
-                            .accessibilityIdentifier("ingredientUnit")
-                    }
-                } header: { Text("Amount · optional") } footer: { Text("Fractions, ranges and amounts such as “to taste” are welcome.") }
-                Section {
-                    TextField("e.g. Spice mix or Sauce", text: $ingredient.group)
-                } header: { Text("Recipe group · optional") } footer: { Text("Group ingredients by what they’re used for in the recipe.") }
-                Section {
-                    Picker("Category", selection: $ingredient.categoryOverride) {
-                        Text("Automatic").tag(Optional<GroceryAisle>.none)
-                        ForEach(GroceryAisle.allCases, id: \.self) { Text($0.rawValue).tag(Optional($0)) }
-                    }
-                } header: { Text("Shopping category") } footer: {
-                    Text("Automatic suggestion: \(IngredientPresentation.matching(ingredient.name).aisle.rawValue). Choose a category to override it in Groceries.")
-                }
+        Form {
+            Section("Ingredient name") {
+                TextField("e.g. olive oil", text: $ingredient.name, axis: .vertical)
+                    .accessibilityIdentifier("ingredientName")
             }
-            .scrollContentBackground(.hidden).background(SupperStyle.canvas)
-            .navigationTitle(isNew ? "Add Ingredient" : "Edit Ingredient").navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(isNew ? "Add" : "Done") {
-                        ingredient.name = ingredient.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                        ingredient.quantity = ingredient.quantity.trimmingCharacters(in: .whitespacesAndNewlines)
-                        ingredient.unit = ingredient.unit.trimmingCharacters(in: .whitespacesAndNewlines)
-                        ingredient.group = ingredient.group.trimmingCharacters(in: .whitespacesAndNewlines)
-                        apply(ingredient); dismiss()
-                    }.disabled(ingredient.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                        .accessibilityIdentifier("saveIngredient")
+            Section {
+                LabeledContent("Quantity") {
+                    TextField("e.g. 1½", text: $ingredient.quantity).multilineTextAlignment(.trailing)
+                        .accessibilityIdentifier("ingredientQuantity")
                 }
+                LabeledContent("Unit") {
+                    TextField("e.g. tbsp", text: $ingredient.unit).multilineTextAlignment(.trailing)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .accessibilityIdentifier("ingredientUnit")
+                }
+            } header: { Text("Amount · optional") } footer: { Text("Fractions, ranges and amounts such as “to taste” are welcome.") }
+            Section {
+                TextField("e.g. Spice mix or Sauce", text: $ingredient.group)
+            } header: { Text("Recipe group · optional") } footer: { Text("Group ingredients by what they’re used for in the recipe.") }
+            Section {
+                Picker("Category", selection: $ingredient.categoryOverride) {
+                    Text("Automatic").tag(Optional<GroceryAisle>.none)
+                    ForEach(GroceryAisle.allCases, id: \.self) { Text($0.rawValue).tag(Optional($0)) }
+                }
+            } header: { Text("Shopping category") } footer: {
+                Text("Automatic suggestion: \(IngredientPresentation.matching(ingredient.name).aisle.rawValue). Choose a category to override it in Groceries.")
+            }
+        }
+        .scrollContentBackground(.hidden).background(SupperStyle.canvas)
+        .navigationTitle(isNew ? "Add Ingredient" : "Edit Ingredient").navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .confirmationAction) {
+                Button(isNew ? "Add" : "Done") {
+                    ingredient.name = ingredient.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                    ingredient.quantity = ingredient.quantity.trimmingCharacters(in: .whitespacesAndNewlines)
+                    ingredient.unit = ingredient.unit.trimmingCharacters(in: .whitespacesAndNewlines)
+                    ingredient.group = ingredient.group.trimmingCharacters(in: .whitespacesAndNewlines)
+                    apply(ingredient); dismiss()
+                }.disabled(ingredient.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityIdentifier("saveIngredient")
             }
         }
     }
@@ -119,10 +119,14 @@ private struct IngredientEditor: View {
 
 struct MethodListEditor: View {
     @Binding var steps: [RecipeStep]
+    var onEditingChange: (Bool) -> Void = { _ in }
     @State private var editing: RecipeStep?
     var body: some View {
         List {
-            Section { Button("Add step", systemImage: "plus.circle.fill") { editing = RecipeStep(text: "") } }
+            Section {
+                Button("Add step", systemImage: "plus.circle.fill") { editing = RecipeStep(text: "") }
+                    .accessibilityIdentifier("addMethodStep")
+            }
             Section {
                 ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
                     Button { editing = step } label: {
@@ -143,7 +147,8 @@ struct MethodListEditor: View {
         .scrollContentBackground(.hidden).background(SupperStyle.canvas)
         .navigationTitle("Method").navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .primaryAction) { EditButton().disabled(steps.isEmpty) } }
-        .sheet(item: $editing) { step in
+        .onChange(of: editing?.id) { _, value in onEditingChange(value != nil) }
+        .navigationDestination(item: $editing) { step in
             MethodStepEditor(step: step, isNew: !steps.contains { $0.id == step.id }) { value in
                 if let index = steps.firstIndex(where: { $0.id == value.id }) { steps[index] = value }
                 else { steps.append(value) }
@@ -157,21 +162,23 @@ private struct MethodStepEditor: View {
     let isNew: Bool
     let apply: (RecipeStep) -> Void
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Instructions") { TextField("What happens in this step?", text: $step.text, axis: .vertical).lineLimit(8...30) }
-                Section("Recipe section · optional") {
-                    TextField("e.g. Naan bread or Pizza toppings", text: $step.group)
-                        .accessibilityIdentifier("methodStepGroup")
-                }
+        Form {
+            Section("Instructions") {
+                TextField("What happens in this step?", text: $step.text, axis: .vertical).lineLimit(4...30)
+                    .accessibilityIdentifier("methodStepText")
             }
-            .navigationTitle(isNew ? "Add Step" : "Edit Step").navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(isNew ? "Add" : "Done") { apply(step); dismiss() }
-                        .disabled(step.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
+            Section("Recipe section · optional") {
+                TextField("e.g. Naan bread or Pizza toppings", text: $step.group)
+                    .accessibilityIdentifier("methodStepGroup")
+            }
+        }
+        .navigationTitle(isNew ? "Add Step" : "Edit Step").navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .confirmationAction) {
+                Button(isNew ? "Add" : "Done") { apply(step); dismiss() }
+                    .disabled(step.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityIdentifier("saveMethodStep")
             }
         }
     }
