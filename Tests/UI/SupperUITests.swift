@@ -50,7 +50,12 @@ import XCTest
         expandRecipeChat(app)
         let input = chatInput(app)
         input.tap(); input.typeText("F")
-        XCTAssertEqual(app.buttons["sendRecipeChat"].frame.height, input.frame.height, accuracy: 1)
+        // A native TextField exposes the text bounds to accessibility, excluding
+        // the pill's padding. Check its alignment and the native control's target
+        // size, then capture the visible surfaces for comparison.
+        XCTAssertGreaterThanOrEqual(app.buttons["sendRecipeChat"].frame.height, 44)
+        XCTAssertEqual(app.buttons["sendRecipeChat"].frame.midY, input.frame.midY, accuracy: 1)
+        capture(app, "Single-line composer with matching native control heights")
         XCTAssertLessThanOrEqual(input.frame.maxY, app.keyboards.firstMatch.frame.minY + 1)
         XCTAssertGreaterThan(app.scrollViews["recipeChatMessages"].frame.height, 200)
         input.typeText("ind ingredients and a method for naan bread")

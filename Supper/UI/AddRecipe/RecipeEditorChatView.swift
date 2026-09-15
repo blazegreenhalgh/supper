@@ -235,7 +235,9 @@ struct RecipeEditorChatView: View {
                     composer
                 }
                 .toolbar {
-                    ToolbarItem(placement: .topBarLeading) { reviewActions }
+                    if hasReviewAction {
+                        ToolbarItem(placement: .topBarLeading) { reviewActions }
+                    }
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Close chat", systemImage: "xmark") { dismiss() }
                             .labelStyle(.iconOnly).tint(.primary)
@@ -309,6 +311,11 @@ struct RecipeEditorChatView: View {
             .onChange(of: session.busy) { _, _ in proxy.scrollTo("chatBottom", anchor: .bottom) }
             .onAppear { if !session.messages.isEmpty { proxy.scrollTo("chatBottom", anchor: .bottom) } }
         }
+    }
+
+    private var hasReviewAction: Bool {
+        !session.photos.isEmpty || session.pending != nil ||
+        (session.undoStack.last?.after == draft && !session.busy)
     }
 
     private var reviewActions: some View {
