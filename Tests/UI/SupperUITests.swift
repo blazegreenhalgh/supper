@@ -579,10 +579,12 @@ import XCTest
         XCTAssertTrue(chicken.isHittable)
         let garnish = app.staticTexts["recipeSection-Garnish"].firstMatch
         XCTAssertTrue(garnish.isHittable)
+        let ingredientDropArea = app.staticTexts["Drop ingredients here or tap +"].firstMatch
+        XCTAssertTrue(ingredientDropArea.isHittable)
         chicken.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 1.1,
-            thenDragTo: garnish.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)),
+            thenDragTo: ingredientDropArea.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)),
             withVelocity: .slow, thenHoldForDuration: 1)
-        capture(app, "Ingredient dropped on section heading")
+        capture(app, "Ingredient dropped into empty section")
         let movedIngredient = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             chicken.frame.minY > garnish.frame.maxY
         }, object: chicken)
@@ -762,7 +764,8 @@ import XCTest
         let tagInput = tagField.exists ? tagField : app.textViews["recipeTagsText"]
         XCTAssertTrue(tagInput.waitForExistence(timeout: 5))
         tagInput.tap(); tagInput.typeText("Weeknight")
-        XCTAssertEqual(tagInput.value as? String, "Weeknight")
+        let completedTyping = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Weeknight"), object: tagInput)
+        XCTAssertEqual(XCTWaiter.wait(for: [completedTyping], timeout: 5), .completed)
         app.buttons["addSingleRecipeTag"].tap()
         XCTAssertTrue(app.staticTexts["Weeknight"].waitForExistence(timeout: 5), app.debugDescription)
         capture(app, "Tags ready to save")

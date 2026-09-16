@@ -19,33 +19,19 @@ jobs:
         suite: [editor, library]
     steps:
       - uses: actions/checkout@v4
-      - name: Select Xcode 26 and start simulator
-        run: |
-          sudo xcode-select -s /Applications/Xcode_26.0.app/Contents/Developer
-          simulator_id=$(xcrun simctl list devices available --json | python3 -c '
-          import json, sys
-          devices = json.load(sys.stdin)["devices"]
-          matches = [device["udid"] for runtime, values in devices.items()
-                     if "SimRuntime.iOS-" in runtime for device in values
-                     if device["name"] == "iPhone 17 Pro"]
-          if not matches:
-              sys.exit("No available iPhone 17 Pro simulator")
-          print(matches[0])
-          ')
-          echo "SUPPER_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
-          xcrun simctl boot "$simulator_id"
+      - name: Select Xcode 26
+        run: sudo xcode-select -s /Applications/Xcode_26.0.app/Contents/Developer
       - name: Domain and persistence regression tests
         if: matrix.suite == 'library'
         run: swift test
       - name: Build app and UI tests once
-        # Simulator boot overlaps compilation. Keychain tests need an ad-hoc signed
-        # app with an application identity; shipping entitlements are unchanged.
-        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination "platform=iOS Simulator,id=$SUPPER_SIMULATOR_ID" -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements build-for-testing
+        # Keychain tests need an ad-hoc signed app with an application identity;
+        # shipping entitlements are unchanged. Let Xcode manage simulator startup.
+        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements build-for-testing
       - name: Run UI regression tests in one session
         env:
           SUPPER_TEST_SUITE: ${{ matrix.suite }}
         run: |
-          xcrun simctl bootstatus "$SUPPER_SIMULATOR_ID" -b
           # These two complementary selections cover every UI test exactly once.
           # Keep one test session per worker: repeated sessions previously added
           # several minutes each. The split balances recorded execution times.
@@ -69,7 +55,7 @@ jobs:
               selection+=("-skip-testing:SupperUITests/SupperUITests/$test_name")
             fi
           done
-          xcodebuild -project Supper.xcodeproj -scheme Supper -destination "platform=iOS Simulator,id=$SUPPER_SIMULATOR_ID" -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath UIResults "${selection[@]}" test-without-building
+          xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath UIResults "${selection[@]}" test-without-building
       - name: Export UI screenshots
         if: always()
         run: |
