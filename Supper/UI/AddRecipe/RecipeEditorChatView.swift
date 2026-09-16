@@ -6,6 +6,7 @@ struct RecipeChatMessage: Identifiable {
     var isUser = false
     var sources: [RecipeAssistantSource] = []
     var assumptions: [String] = []
+    var adaptations: [String] = []
 }
 
 /// Owned by the editor, so dismissing and reopening the chat retains its review,
@@ -44,7 +45,8 @@ struct RecipeChatMessage: Identifiable {
         // starting point of another request after the user edits the recipe.
         let previous = pending.flatMap { $0.base == draft ? $0 : nil }
         let working = previous?.suggested ?? draft
-        let history = messages.suffix(6).map { ($0.isUser ? "You: " : "Assistant: ") + String($0.text.prefix(400)) }.joined(separator: "\n")
+        let history = messages.suffix(6).map { ($0.isUser ? "You: " : "Assistant: ") + String($0.text.prefix(1200)) }.joined(separator: "\n")
+        let userInput = (messages.filter(\.isUser).suffix(3).map(\.text) + [text]).joined(separator: "\n")
         messages.append(RecipeChatMessage(text: text, isUser: true))
         input = ""; error = nil; retryRequest = nil; activeRequest = text
         busy = true; progress = "Understanding your request…"
@@ -90,15 +92,21 @@ struct RecipeChatMessage: Identifiable {
                     messages.append(RecipeChatMessage(text: kind == .online ? "Found \(found.count) online photo option\(found.count == 1 ? "" : "s"). Preview one, then choose Use photo to set it on your draft." : "Your photo is ready to preview. Choose Use photo when you’re happy with it.", sources: found.compactMap(\.source)))
                     return
                 }
-                let reply = try await RecipeEditorAssistant().respond(to: text, draft: working, conversation: history) { [weak self] status in
+                let reply = try await RecipeEditorAssistant().respond(to: text, draft: working, conversation: history, userInput: userInput) { [weak self] status in
                     guard self?.requestID == id else { return }
                     self?.progress = status
                 }
                 try Task.checkCancellation()
                 guard requestID == id else { return }
-                let proposal = RecipeAssistantProposal(base: draft, suggested: reply.draft, sources: (previous?.sources ?? []) + [reply.source])
-                pending = proposal.changes.isEmpty ? nil : proposal
-                messages.append(RecipeChatMessage(text: reply.message, sources: [reply.source], assumptions: reply.assumptions))
+                let sources = reply.source.map { [$0] } ?? []
+                if let changed = reply.draft {
+                    let proposal = RecipeAssistantProposal(base: draft, suggested: changed, sources: (previous?.sources ?? []) + sources,
+                        adaptations: (previous?.adaptations ?? []) + reply.adaptations,
+                        assumptions: (previous?.assumptions ?? []) + reply.assumptions)
+                    pending = proposal.changes.isEmpty ? nil : proposal
+                }
+                // Clarifications and declined adaptations leave any earlier proposal intact.
+                messages.append(RecipeChatMessage(text: reply.message, sources: sources, assumptions: reply.assumptions, adaptations: reply.adaptations))
             } catch {
                 guard requestID == id, !Task.isCancelled else { return }
                 self.error = error.localizedDescription
@@ -382,6 +390,15 @@ struct RecipeEditorChatView: View {
     private func messageView(_ message: RecipeChatMessage) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(message.text).font(.body).textSelection(.enabled)
+            if !message.adaptations.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Adaptations from the base recipe").font(.caption.weight(.semibold))
+                    Text(RecipeAssistantProposal.adaptationNotice).font(.caption)
+                    ForEach(Array(message.adaptations.enumerated()), id: \.offset) { _, adaptation in
+                        Text(adaptation).font(.subheadline)
+                    }
+                }.foregroundStyle(.secondary)
+            }
             if !message.assumptions.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Assumptions to review").font(.caption.weight(.semibold))
@@ -406,6 +423,9 @@ struct RecipeEditorChatView: View {
                 Button("Preview recipe changes") { reviewing = proposal }
             }
             Text("\(proposal.changes.count) changes ready to review").font(.subheadline).foregroundStyle(.secondary)
+            if !proposal.adaptations.isEmpty {
+                Text(RecipeAssistantProposal.adaptationNotice).font(.caption).foregroundStyle(.secondary)
+            }
             if let blocker = session.applyBlocker(for: proposal, draft: draft) {
                 Text(blocker).font(.caption).foregroundStyle(.secondary)
                     .accessibilityIdentifier("recipeAIApplyBlocker")

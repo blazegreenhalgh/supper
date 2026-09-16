@@ -40,6 +40,10 @@ public struct RecipeAssistantPatch: Codable, Sendable {
         self.ingredients = ingredients; self.steps = steps
     }
 
+    public var isEmpty: Bool {
+        title == nil && servings == nil && durationMinutes == nil && ingredients.isEmpty && steps.isEmpty
+    }
+
     public func applying(to original: RecipeDraft) throws -> RecipeDraft {
         func invalid() -> SupperError { .invalid("The suggested changes couldn’t be matched to this recipe. Please try a smaller request.") }
         guard ingredients.count <= 60, steps.count <= 40,
@@ -119,8 +123,13 @@ public struct RecipeAssistantProposal: Identifiable, Sendable {
     public let base: RecipeDraft
     public let suggested: RecipeDraft
     public let sources: [RecipeAssistantSource]
-    public init(base: RecipeDraft, suggested: RecipeDraft, sources: [RecipeAssistantSource]) {
+    public let adaptations: [String]
+    public let assumptions: [String]
+    public static let adaptationNotice = "Based on a published recipe. These adaptations have not been kitchen-tested."
+    public init(base: RecipeDraft, suggested: RecipeDraft, sources: [RecipeAssistantSource],
+                adaptations: [String] = [], assumptions: [String] = []) {
         self.base = base; self.suggested = suggested
+        self.adaptations = adaptations; self.assumptions = assumptions
         var seen = Set<URL>()
         self.sources = sources.filter { seen.insert($0.url).inserted }
     }
@@ -166,6 +175,16 @@ public struct RecipeAssistantProposal: Identifiable, Sendable {
         if !newSources.isEmpty {
             let links = newSources.map { "\($0.title)\n\($0.url.absoluteString)" }.joined(separator: "\n\n")
             result.notes += (result.notes.isEmpty ? "" : "\n\n") + "Sources consulted with Ask AI:\n" + links
+        }
+        if !adaptations.isEmpty {
+            let record = Self.adaptationNotice + "\n" + adaptations.joined(separator: "\n")
+            if !result.notes.contains(record) {
+                result.notes += (result.notes.isEmpty ? "" : "\n\n") + record
+            }
+        }
+        if !assumptions.isEmpty {
+            let record = "Assumptions reviewed with Ask AI:\n" + assumptions.joined(separator: "\n")
+            if !result.notes.contains(record) { result.notes += (result.notes.isEmpty ? "" : "\n\n") + record }
         }
         return result
     }

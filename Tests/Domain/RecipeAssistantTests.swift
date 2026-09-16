@@ -164,3 +164,115 @@ private let naanSource = RecipeAssistantSource(title: "Naan", url: URL(string: "
     #expect(draft.steps.map(\.order) == [0, 1, 2])
     #expect(draft.steps.last?.text == "Fill with cheese before rolling.")
 }
+
+private func sauceFixture() -> (RecipeDraft, RecipeDraft, GroundedRecipeEdit) {
+    let draft = RecipeDraft(title: "Our creamy beef sauce", servings: 4)
+    let source = RecipeDraft(title: "Cream and stock sauce", servings: 4,
+        sourceURL: URL(string: "https://recipes.example/cream-sauce")!,
+        ingredients: [Ingredient(name: "Beef stock", quantity: "250", unit: "ml"),
+                      Ingredient(name: "Cream", quantity: "100", unit: "ml"),
+                      Ingredient(name: "Plain flour", quantity: "1", unit: "tbsp"),
+                      Ingredient(name: "Pepper", quantity: "1/4", unit: "tsp")],
+        steps: [RecipeStep(text: "Whisk the flour into the cold stock. Simmer for 3 minutes, stirring."),
+                RecipeStep(text: "Stir in the cream and pepper over low heat. Do not boil.")])
+    let edit = GroundedRecipeEdit(outcome: .adapted, sourceIndex: 0, message: "Review this sauce adaptation.",
+        baseRationale: "The base uses flour-thickened beef stock and cream; its core amounts and low-heat method are retained.",
+        assumptions: ["Sauce yield: four servings, matching the base."],
+        ingredientAdaptations: [
+            .init(patchIndex: 1, sourceIndex: 1, kind: .substitution, requestedName: "Heavy cream", reason: "Use the requested cream at the source amount."),
+            .init(patchIndex: 3, sourceIndex: -1, kind: .seasoning, requestedName: "Soy sauce", reason: "A small suggested amount adds seasoning; taste before adding salt."),
+            .init(patchIndex: 4, sourceIndex: -1, kind: .seasoning, requestedName: "Rosemary", reason: "A small suggested amount adds the requested herb.")],
+        methodAdaptations: [.init(patchIndex: 1, sourceIndices: [1], reason: "Add soy sauce and rosemary while retaining low heat and the instruction not to boil.")],
+        patch: RecipeAssistantPatch(ingredients: [
+            .init(operation: .add, name: "Beef stock", quantity: "250", unit: "ml"),
+            .init(operation: .add, name: "Heavy cream", quantity: "100", unit: "ml"),
+            .init(operation: .add, name: "Plain flour", quantity: "1", unit: "tbsp"),
+            .init(operation: .add, name: "Soy sauce", quantity: "1", unit: "tsp"),
+            .init(operation: .add, name: "Rosemary", quantity: "1/4", unit: "tsp"),
+            .init(operation: .add, name: "Pepper", quantity: "1/4", unit: "tsp")],
+            steps: [.init(operation: .add, text: source.steps[0].text),
+                    .init(operation: .add, text: "Stir in the heavy cream, soy sauce, rosemary and pepper over low heat. Do not boil.")]))
+    return (draft, source, edit)
+}
+
+private let sauceRequest = "Find a sauce for four with beef stock, heavy cream, plain flour, soy sauce, pepper and rosemary."
+
+@Test func sauceCanUsePublishedFoundationWithoutExactSeasoningMatch() throws {
+    let (draft, source, edit) = sauceFixture()
+    let changed = try #require(try edit.validatedDraft(draft, sources: [source], userInput: sauceRequest))
+    #expect(changed.ingredients.map(\.quantity) == ["250", "100", "1", "1", "1/4", "1/4"])
+    #expect(changed.steps[0].text == source.steps[0].text)
+    let notes = edit.adaptationNotes(source: source)
+    #expect(notes.contains { $0.contains("estimate") && $0.contains("Soy sauce") })
+    #expect(notes.contains { $0.contains("100 ml Cream") && $0.contains("100 ml Heavy cream") })
+    let proposal = RecipeAssistantProposal(base: draft, suggested: changed,
+        sources: [.init(title: source.title, url: source.sourceURL!)], adaptations: notes, assumptions: edit.assumptions)
+    let applied = try proposal.applying(to: draft)
+    #expect(applied.notes.contains("not been kitchen-tested"))
+    #expect(applied.notes.contains(source.sourceURL!.absoluteString))
+    #expect(applied.notes.contains("Sauce yield: four servings"))
+    #expect(try RecipeAssistantUndo(before: draft, after: applied).restoring(applied) == draft)
+}
+
+@Test func adaptationCannotChangeCoreAmountOrHideAnUndisclosedIngredient() throws {
+    let (draft, source, initial) = sauceFixture()
+    var edit = initial
+    edit.patch.ingredients[1].quantity = "500"
+    #expect(throws: (any Error).self) { try edit.validatedDraft(draft, sources: [source], userInput: sauceRequest) }
+    edit = initial
+    edit.patch.ingredients.append(.init(operation: .add, name: "Cornflour", quantity: "10", unit: "g"))
+    #expect(throws: (any Error).self) { try edit.validatedDraft(draft, sources: [source], userInput: sauceRequest) }
+    edit = initial
+    edit.ingredientAdaptations[2].requestedName = "Thyme"
+    edit.patch.ingredients[4].name = "Thyme"
+    #expect(throws: (any Error).self) { try edit.validatedDraft(draft, sources: [source], userInput: sauceRequest) }
+}
+
+@Test func adaptationRequiresRealSourceAndValidUniqueEvidenceReferences() throws {
+    let (draft, source, initial) = sauceFixture()
+    #expect(throws: (any Error).self) { try initial.validatedDraft(draft, sources: [], userInput: sauceRequest) }
+    var noLink = source; noLink.sourceURL = nil
+    #expect(throws: (any Error).self) { try initial.validatedDraft(draft, sources: [noLink], userInput: sauceRequest) }
+    var edit = initial; edit.methodAdaptations[0].sourceIndices = [20]
+    #expect(throws: (any Error).self) { try edit.validatedDraft(draft, sources: [source], userInput: sauceRequest) }
+    edit = initial; edit.methodAdaptations = []
+    #expect(throws: (any Error).self) { try edit.validatedDraft(draft, sources: [source], userInput: sauceRequest) }
+    edit = initial; edit.ingredientAdaptations.append(edit.ingredientAdaptations[0])
+    #expect(throws: (any Error).self) { try edit.validatedDraft(draft, sources: [source], userInput: sauceRequest) }
+    edit = initial; edit.outcome = .sourced
+    #expect(throws: (any Error).self) { try edit.validatedDraft(draft, sources: [source], userInput: sauceRequest) }
+}
+
+@Test func clarificationDoesNotRequireASourceAndCannotSmuggleChanges() throws {
+    let draft = RecipeDraft(title: "Our dinner")
+    var edit = GroundedRecipeEdit(outcome: .clarification, sourceIndex: -1, message: "How many people is this for?",
+        baseRationale: "", assumptions: [], ingredientAdaptations: [], methodAdaptations: [], patch: .init())
+    #expect(try edit.validatedDraft(draft, sources: [], userInput: "Find ingredients and a method") == nil)
+    edit.patch.servings = 4
+    #expect(throws: (any Error).self) { try edit.validatedDraft(draft, sources: [], userInput: "Find ingredients and a method") }
+    #expect(draft.servings == nil)
+}
+
+@Test func followupRetainsEarlierUserIngredientsButAssistantTextCannotAuthorizeThem() throws {
+    let (draft, source, edit) = sauceFixture()
+    #expect(throws: (any Error).self) { try edit.validatedDraft(draft, sources: [source], userInput: "Four people") }
+    #expect(try edit.validatedDraft(draft, sources: [source], userInput: sauceRequest + "\nFour people") != nil)
+}
+
+@Test func reviewCannotApproveIfAnyCheckFailsOrAQuestionRemains() throws {
+    let keys = ["baseFits", "coreRatiosPreserved", "techniquePreserved", "changesExplained", "ingredientsConsistent", "yieldMatches"]
+    var json: [String: Any] = Dictionary(uniqueKeysWithValues: keys.map { ($0, true as Any) })
+    json["question"] = ""; json["concern"] = ""
+    func decode(_ json: [String: Any]) throws -> RecipeAdaptationReview {
+        try JSONDecoder().decode(RecipeAdaptationReview.self, from: JSONSerialization.data(withJSONObject: json))
+    }
+    #expect(try decode(json).approved)
+    for key in keys {
+        var rejected = json; rejected[key] = false; rejected["concern"] = "This change is not supported by the base."
+        let review = try decode(rejected)
+        try review.validate()
+        #expect(!review.approved)
+    }
+    json["question"] = "The base serves six. Would you like to use that yield?"
+    #expect(try !decode(json).approved)
+}

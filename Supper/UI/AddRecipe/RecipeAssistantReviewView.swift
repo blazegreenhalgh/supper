@@ -27,6 +27,23 @@ struct RecipeAssistantReviewView: View {
                         Text("Recipe").tag(false)
                     }.pickerStyle(.segmented).accessibilityIdentifier("recipeAIPreviewMode")
                     if showChanges { summary }
+                    if !proposal.adaptations.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            heading("Adaptations from the base recipe")
+                            Text(RecipeAssistantProposal.adaptationNotice).font(.callout).foregroundStyle(.secondary)
+                            ForEach(Array(proposal.adaptations.enumerated()), id: \.offset) { _, adaptation in
+                                Text(adaptation).font(.callout)
+                            }
+                        }.accessibilityIdentifier("recipeAIAdaptations")
+                    }
+                    if !proposal.assumptions.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            heading("Assumptions to review")
+                            ForEach(Array(proposal.assumptions.enumerated()), id: \.offset) { _, assumption in
+                                Text(assumption).font(.callout)
+                            }
+                        }
+                    }
                     if let image = recipe.imageData {
                         RecipeImage(data: image).frame(height: 200).clipShape(.rect(cornerRadius: 20))
                     }
