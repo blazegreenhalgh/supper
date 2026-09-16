@@ -309,14 +309,14 @@ import FoundationNetworking
             let body = try Self.body(request)
             #expect(body["store"] as? Bool == false)
             #expect((body["input"] as? String)?.contains("heavy cream, stock, soy sauce") == true)
-            let answer = #"{"action":"recipe","question":"How many servings of sauce do you need?","searchRequest":"","reuseSources":false}"#
+            let answer = #"{"action":"recipe","question":"What dish is the sauce for?","searchRequest":"","reuseSources":false}"#
             return (200, try JSONSerialization.data(withJSONObject: ["status": "completed", "output": [
                 ["type": "message", "content": [["type": "output_text", "text": answer]]]
             ]]))
         }
         let plan = try await client.planRecipeChat(request: "Find the method", context: "We used heavy cream, stock, soy sauce")
         #expect(plan.searchRequest.isEmpty)
-        #expect(plan.question.contains("servings"))
+        #expect(plan.question.contains("dish"))
         #expect(throws: (any Error).self) { try RecipeEditPlan(question: "How many?", searchRequest: "cream sauce").validate() }
         #expect(throws: (any Error).self) { try RecipeEditPlan(question: "", searchRequest: "").validate() }
     }
@@ -325,7 +325,7 @@ import FoundationNetworking
         let client = try makeClient { request in
             let body = try Self.body(request)
             #expect((body["instructions"] as? String)?.contains("preserve its core liquid-to-flour ratios") == true)
-            let answer = #"{"outcome":"clarification","sourceIndex":-1,"message":"How much beef are you cooking?","baseRationale":"","assumptions":[],"ingredientAdaptations":[],"methodAdaptations":[],"patch":{"title":null,"servings":null,"durationMinutes":null,"ingredients":[],"steps":[]}}"#
+            let answer = #"{"outcome":"clarification","sourceIndex":-1,"message":"Is the beef minced or cubed?","baseRationale":"","assumptions":[],"ingredientAdaptations":[],"methodAdaptations":[],"patch":{"title":null,"servings":null,"durationMinutes":null,"ingredients":[],"steps":[]}}"#
             return (200, try JSONSerialization.data(withJSONObject: ["status": "completed", "output": [
                 ["type": "message", "content": [["type": "output_text", "text": answer]]]
             ]]))
@@ -354,6 +354,58 @@ import FoundationNetworking
         let review = try await client.reviewRecipeAdaptation(edit, draft: .init(), source: source, userInput: "Add cream sauce")
         #expect(!review.approved)
         #expect(!review.techniquePreserved)
+    }
+
+    @MainActor @Test(arguments: [Optional<Int>.none, .some(2)])
+    func findingIngredientsAndMethodUsesPublishedServingsWithoutAQuestion(draftServings: Int?) async throws {
+        var (draft, source, adapted) = sauceFixture()
+        draft.servings = draftServings
+        adapted.patch.servings = source.servings
+        let request = "Find ingredients and method. We used heavy cream, beef stock, flour, soy sauce, pepper and rosemary."
+        var stages: [String] = []
+        let client = try makeClient { request in
+            let body = try Self.body(request)
+            let format = (body["text"] as? [String: Any])?["format"] as? [String: Any]
+            let name = format?["name"] as? String ?? "search"
+            stages.append(name)
+            if name == "search" {
+                return (200, try JSONSerialization.data(withJSONObject: ["status": "completed", "output": [
+                    ["type": "web_search_call", "status": "completed", "action": ["type": "search", "sources": [["url": source.sourceURL!.absoluteString]]]]
+                ]]))
+            }
+            let instructions = try #require(body["instructions"] as? String)
+            #expect(instructions.contains("Use the published recipe's servings and ingredient quantities by default."))
+            #expect(instructions.contains("Do not ask how many servings, portions or people"))
+            #expect(!instructions.contains("its identity and yield or amount of main ingredient"))
+            #expect(!instructions.contains("ask whether to use the source yield"))
+            #expect(!instructions.contains("source/component yield fits the known request and draft"))
+            let answer: String
+            switch name {
+            case "recipe_chat_plan":
+                answer = #"{"action":"recipe","question":"","searchRequest":"cream stock sauce","reuseSources":false}"#
+            case "recipe_edit":
+                answer = String(decoding: try JSONEncoder().encode(adapted), as: UTF8.self)
+            case "recipe_adaptation_review":
+                answer = #"{"baseFits":true,"coreRatiosPreserved":true,"techniquePreserved":true,"changesExplained":true,"ingredientsConsistent":true,"yieldMatches":true,"question":"","concern":""}"#
+            default:
+                throw SupperError.invalid("Unexpected extra request")
+            }
+            return (200, try Self.response(answer))
+        }
+        let session = RecipeEditSession()
+        let result = try await session.respond(to: request, draft: draft, conversation: "", userInput: request,
+            client: client, findSources: { query, _ in
+                let links = try await client.searchRecipes(query)
+                #expect(links == [source.sourceURL!])
+                return [source]
+            }, progress: { _ in })
+
+        guard case .recipe(let reply) = result else { Issue.record("Expected a recipe proposal"); return }
+        let changed = try #require(reply.draft)
+        #expect(changed.servings == 4)
+        #expect(changed.ingredients.map(\.quantity) == ["250", "100", "1", "1", "1/4", "1/4"])
+        #expect(stages == ["recipe_chat_plan", "search", "recipe_edit", "recipe_adaptation_review"])
+        #expect(draft.servings == draftServings)
     }
 
     @MainActor @Test func servingClarificationResumesTheSelectedRecipeWithoutSearchingAgain() async throws {
