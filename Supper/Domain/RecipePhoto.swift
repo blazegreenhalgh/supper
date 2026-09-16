@@ -5,7 +5,7 @@ public enum RecipeChatAction: String, Codable, CaseIterable, Sendable {
 }
 
 public enum RecipePhotoKind: String, CaseIterable, Sendable {
-    case online = "Find online", generated = "Generate", enhanced = "Polish my photo"
+    case online = "Find online", generated = "Generate", enhanced = "Create from my photo"
 }
 
 /// Photo edits never replace ingredient/method edits made while an image was loading.
@@ -26,7 +26,7 @@ public struct RecipePhotoProposal: Identifiable, Sendable {
         switch kind {
         case .online: return "Photo from \(source?.title ?? "an online source")"
         case .generated: return "AI-generated cover"
-        case .enhanced: return "AI-edited from your food photo"
+        case .enhanced: return "AI-generated from your food photo"
         }
     }
     public func applying(to draft: RecipeDraft) throws -> RecipeDraft {
@@ -40,8 +40,8 @@ public struct RecipePhotoProposal: Identifiable, Sendable {
             credit = "Cover photo: \(source.title)\n\(source.url.absoluteString)\nImage: \(imageURL.absoluteString)"
         case .generated: credit = "Cover generated with AI (GPT Image 2.5 Flare)."
         case .enhanced:
-            guard let originalPhoto, !originalPhoto.isEmpty else { throw SupperError.invalid("Choose the original food photo before editing it.") }
-            credit = "Cover edited with AI from a supplied food photo (GPT Image 2.5 Sunburst)."
+            guard let originalPhoto, !originalPhoto.isEmpty else { throw SupperError.invalid("Choose a food reference photo before generating this cover.") }
+            credit = "Cover generated with AI using a supplied food photo as reference (GPT Image 2.5 Sunburst)."
         }
         var value = draft; value.imageData = image
         if !value.notes.contains(credit) { value.notes += (value.notes.isEmpty ? "" : "\n\n") + credit }

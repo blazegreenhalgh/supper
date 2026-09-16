@@ -71,13 +71,13 @@ struct RecipeChatMessage: Identifiable {
                 }
                 if action == .choosePhoto {
                     choosingPhoto = true
-                    messages.append(RecipeChatMessage(text: "Would you like a photo from online, a generated cover, or an editorial edit of your own food photo?"))
+                    messages.append(RecipeChatMessage(text: "Would you like a photo from online, a generated cover, or a new cookbook photo using your own food as the reference?"))
                     return
                 }
                 if action != .recipe {
                     if action == .enhancePhoto, draft.imageData == nil {
                         needsPhotoUpload = true
-                        messages.append(RecipeChatMessage(text: "Upload your food photo, then I can polish its lighting and presentation. You’ll be able to compare it with the original."))
+                        messages.append(RecipeChatMessage(text: "Upload your food photo, then I can create a new top-down cookbook photograph using it as the food reference. You’ll be able to compare it with the original."))
                         return
                     }
                     let kind: RecipePhotoKind = action == .findPhoto ? .online : action == .generatePhoto ? .generated : .enhanced
@@ -187,10 +187,19 @@ struct RecipeChatMessage: Identifiable {
             messages.append(RecipeChatMessage(text: "Review the collection changes below, then apply them to your draft."))
             return
         }
-        if arguments.contains("--ui-testing"), arguments.contains("--recipe-photo-ui-testing"), messages.isEmpty,
-           let image = UIImage(systemName: "fork.knife.circle.fill")?.pngData() {
+        if arguments.contains("--ui-testing"), arguments.contains("--recipe-photo-ui-testing"), messages.isEmpty {
+            let image = UIGraphicsImageRenderer(size: CGSize(width: 640, height: 640)).pngData { context in
+                UIColor.systemOrange.setFill()
+                context.fill(CGRect(x: 0, y: 0, width: 640, height: 640))
+            }
+            // A tall original reproduces scaled-to-fill content extending over
+            // the comparison picker despite the preview's square clipping.
+            let original = UIGraphicsImageRenderer(size: CGSize(width: 320, height: 640)).pngData { context in
+                UIColor.systemTeal.setFill()
+                context.fill(CGRect(x: 0, y: 0, width: 320, height: 640))
+            }
             photos = RecipePhotoKind.allCases.map { kind in
-                RecipePhotoProposal(image: image, previousImage: draft.imageData, originalPhoto: kind == .enhanced ? image : nil,
+                RecipePhotoProposal(image: image, previousImage: draft.imageData, originalPhoto: kind == .enhanced ? original : nil,
                                     kind: kind, source: kind == .online ? RecipeAssistantSource(title: "UI test photo source", url: URL(string: "https://example.com/recipe")!) : nil,
                                     imageURL: kind == .online ? URL(string: "https://example.com/photo.jpg")! : nil)
             }
@@ -421,7 +430,7 @@ struct RecipeEditorChatView: View {
                 Menu("Photo options", systemImage: "photo.badge.plus") {
                     Button("Find a photo online") { photoRequest(.findPhoto) }
                     Button("Generate a cover") { photoRequest(.generatePhoto) }
-                    Button("Polish my food photo") { inputFocused = false; showingPhotoTools = true }
+                    Button("Create from my food photo") { inputFocused = false; showingPhotoTools = true }
                 }
                 .labelStyle(.iconOnly).supperGlassButton().tint(.primary)
                 .controlSize(.large).buttonBorderShape(.circle)
@@ -488,7 +497,7 @@ struct RecipeEditorChatView: View {
                 Button("Find a photo online", systemImage: "globe") { photoRequest(.findPhoto) }
                 Button("Generate a cover", systemImage: "sparkles") { photoRequest(.generatePhoto) }
             }
-            Button("Upload and polish a food photo", systemImage: "photo.badge.plus") { inputFocused = false; showingPhotoTools = true }
+            Button("Create from a food photo", systemImage: "photo.badge.plus") { inputFocused = false; showingPhotoTools = true }
         }.font(.subheadline).disabled(session.busy)
     }
 

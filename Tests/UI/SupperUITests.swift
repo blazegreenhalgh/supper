@@ -314,9 +314,20 @@ import XCTest
         app.scrollViews["chatPhotoCarousel"].swipeLeft()
         app.buttons["previewChatPhoto-2"].tap()
         XCTAssertTrue(app.segmentedControls["photoComparison"].waitForExistence(timeout: 5))
-        app.segmentedControls["photoComparison"].buttons["Original"].tap()
-        app.segmentedControls["photoComparison"].buttons["Edited"].tap()
-        XCTAssertTrue(app.staticTexts["recipePhotoCaption"].label.contains("AI-edited"))
+        let original = app.segmentedControls["photoComparison"].buttons["Original"]
+        let generated = app.segmentedControls["photoComparison"].buttons["Generated"]
+        XCTAssertTrue(generated.isSelected)
+        for _ in 0..<3 {
+            XCTAssertTrue(original.isHittable)
+            original.tap()
+            XCTAssertTrue(original.isSelected)
+            XCTAssertFalse(generated.isSelected)
+            XCTAssertTrue(generated.isHittable)
+            generated.tap()
+            XCTAssertTrue(generated.isSelected)
+            XCTAssertFalse(original.isSelected)
+        }
+        XCTAssertTrue(app.staticTexts["recipePhotoCaption"].label.contains("AI-generated from your food photo"))
         capture(app, "Uploaded food photo comparison")
         app.buttons["closePhotoPreview"].tap()
         app.buttons["reviewChatPhoto"].tap()
@@ -328,7 +339,7 @@ import XCTest
         app.buttons["undoRecipeAIEdit"].tap()
         XCTAssertFalse(app.buttons["undoRecipeAIEdit"].exists)
         app.buttons["chatPhotoOptions"].tap()
-        app.buttons["Polish my food photo"].tap()
+        app.buttons["Create from my food photo"].tap()
         XCTAssertTrue(app.buttons["uploadFoodPhoto"].waitForExistence(timeout: 5))
         capture(app, "Editorial food photo upload option")
         app.buttons["Done"].tap(); collapseRecipeChat(app); app.buttons["Cancel"].tap()
