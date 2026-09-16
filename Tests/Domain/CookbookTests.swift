@@ -88,6 +88,21 @@ import Testing
     let natural = RecipeFilter.naturalLanguage("easy chicken under 30 minutes")
     #expect(natural.query == "chicken"); #expect(natural.maximumMinutes == 29); #expect(natural.tags == ["Easy"])
 }
+@Test func exploreAndRegularRecipesStaySeparateWhileSearchCoversBoth() {
+    let dinner = RecipeCollection(name: "Dinner")
+    let regular = Recipe(title: "Chicken", tags: ["Easy"], collectionIDs: [dinner.id])
+    let later = Recipe(title: "Chicken to try", tags: ["Easy"], collectionIDs: [dinner.id, RecipeCollection.exploreID])
+    let recipes = [regular, later]
+    #expect(recipes.filter(RecipeBrowseScope.recipes.includes).map(\.id) == [regular.id])
+    #expect(recipes.filter(RecipeBrowseScope.explore.includes).map(\.id) == [later.id])
+    #expect(recipes.filter(RecipeBrowseScope.all.includes).count == 2)
+    var filter = RecipeFilter()
+    filter.query = "Chicken"; filter.tags = ["Easy"]; filter.collectionIDs = [dinner.id]
+    #expect(recipes.filter { filter.matches($0, collections: [dinner, .explore], memberID: "me") }.count == 2)
+    filter.collectionIDs.insert(RecipeCollection.exploreID)
+    #expect(recipes.filter { filter.matches($0, collections: [dinner, .explore], memberID: "me") }.map(\.id) == [later.id])
+    #expect(RecipeDraft(recipe: later).makeRecipe().isInExplore)
+}
 @Test func reactionsUseMembersNotEmojiAndRespectRemoval() {
     let members = [HouseholdMember(id: "a", name: "Alice", accountID: "appleA"), HouseholdMember(id: "b", name: "Alice's iPad", accountID: "appleA"), HouseholdMember(id: "c", name: "Bob", accountID: "appleB")]
     let reactions = [RecipeReaction(personID: "a", emoji: "👍"), RecipeReaction(personID: "b", emoji: "❤️", updatedAt: Date()), RecipeReaction(personID: "c", emoji: "❤️")]

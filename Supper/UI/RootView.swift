@@ -15,6 +15,9 @@ struct RootView: View {
     @State private var path: [RecipeRoute] = []
     @Namespace private var recipeTransition
     @Namespace private var searchTransition
+    @Namespace private var exploreTransition
+    @State private var exploreFilter = RecipeFilter()
+    @State private var explorePath: [RecipeRoute] = []
     @State private var searchFilter = RecipeFilter()
     @State private var searchPath: [RecipeRoute] = []
     var body: some View {
@@ -30,6 +33,15 @@ struct RootView: View {
             }
             Tab("Groceries", systemImage: "basket") {
                 NavigationStack { GroceryListView() }
+            }
+            Tab("Explore", systemImage: "safari") {
+                NavigationStack(path: $explorePath) {
+                    RecipeLibraryView(filter: $exploreFilter, isExplore: true, transition: exploreTransition) { explorePath.append($0) }
+                        .navigationDestination(for: RecipeRoute.self) { route in
+                            RecipeDetailView(recipeID: route.recipeID)
+                                .supperRecipeZoom(sourceID: route.sourceID, in: exploreTransition)
+                        }
+                }
             }
             Tab("Search", systemImage: "magnifyingglass", role: .search) {
                 // Keep search attached to a stable stack throughout pushes and interactive pops.
@@ -49,6 +61,9 @@ struct RootView: View {
         }
         .supperError($store.errorMessage, title: "Supper couldn't complete that")
         .sheet(isPresented: Binding(get: { store.pendingInvitation != nil }, set: { if !$0 { store.pendingInvitation = nil } })) { HouseholdInvitationView() }
-        .onChange(of: store.activeHouseholdID) { _, _ in path.removeAll(); searchPath.removeAll(); filter = RecipeFilter(); searchFilter = RecipeFilter() }
+        .onChange(of: store.activeHouseholdID) { _, _ in
+            path.removeAll(); searchPath.removeAll(); explorePath.removeAll()
+            filter = RecipeFilter(); searchFilter = RecipeFilter(); exploreFilter = RecipeFilter()
+        }
     }
 }

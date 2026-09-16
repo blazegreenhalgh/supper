@@ -34,7 +34,7 @@ import Testing
         #expect(store.tags.contains("Sweet, salty"))
         #expect(!store.tags.contains("Sweet"))
         #expect(store.recipes.allSatisfy { $0.tags.contains("Weeknight") })
-        #expect(store.collections.map(\.id) == [collection.id])
+        #expect(store.collections.map(\.id) == [RecipeCollection.exploreID, collection.id])
         #expect(store.collectionSections.count == 2)
         try store.reorderCollections([RecipeCollection.allRecipesID, collection.id])
         #expect(store.tags.contains("Comfort"))
@@ -140,7 +140,7 @@ import Testing
         try store.reorderCollections([b.id, RecipeCollection.allRecipesID, a.id])
         try store.refresh()
         #expect(store.collectionSections.map(\.id) == [b.id, RecipeCollection.allRecipesID, a.id])
-        #expect(store.collections.map(\.id) == [b.id, a.id])
+        #expect(store.collections.map(\.id) == [RecipeCollection.exploreID, b.id, a.id])
         #expect(throws: (any Error).self) { try store.deleteCollection(RecipeCollection.allRecipesID) }
         let recipe = Recipe(title: "Soup")
         try store.addRecipe(recipe)
@@ -169,6 +169,63 @@ import Testing
         #expect(saved.ingredients.last?.quantity == "300")
         #expect(saved.steps.map(\.group) == ["Sauce", "Sauce"])
         #expect(saved.steps.map(\.text) == ["Cook sauce.", "Mix dough."])
+    }
+
+    @Test func exploreMovesPreserveRecipeAndOtherMemberships() async throws {
+        let store = try await makeStore()
+        let collection = RecipeCollection(name: "Dinner", isOnHome: true)
+        try store.saveCollection(collection)
+        let regular = Recipe(title: "Our regular dinner")
+        let idea = Recipe(title: "Something new", imageData: Data([1, 2, 3]), tags: ["Easy"],
+                          notes: "Try this next week", sourceURL: URL(string: "https://example.com/recipe"),
+                          ingredients: [Ingredient(name: "Rice", quantity: "200", unit: "g")],
+                          steps: [RecipeStep(text: "Cook the rice.")], collectionIDs: [collection.id])
+        try store.addRecipe(regular)
+        try store.saveToExplore(idea)
+        try store.saveToExplore(idea) // Repeated keep must not make another recipe or collection.
+        try store.setReaction("❤️", for: idea)
+        let before = try #require(store.recipes.first { $0.id == idea.id })
+        #expect(before.isInExplore)
+        #expect(store.recipes.first { $0.id == regular.id } == regular)
+        #expect(!store.collectionSections.contains { $0.id == RecipeCollection.exploreID })
+        let context = store.persistence.container.viewContext
+        let objects = try context.fetch(NSFetchRequest<RecipeMO>(entityName: "Recipe"))
+        let objectID = try #require(objects.first { $0.id == idea.id }).objectID
+        let exploreRecords = try context.fetch(NSFetchRequest<RecipeCollectionMO>(entityName: "RecipeCollection"))
+        #expect(exploreRecords.filter { $0.id == RecipeCollection.exploreID }.count == 1)
+
+        try store.setExplore(false, recipeID: idea.id)
+        try store.refresh()
+        var expected = before
+        expected.collectionIDs.remove(RecipeCollection.exploreID)
+        #expect(store.recipes.first { $0.id == idea.id } == expected)
+        #expect(try context.fetch(NSFetchRequest<RecipeMO>(entityName: "Recipe")).first { $0.id == idea.id }?.objectID == objectID)
+        try store.setExplore(true, recipeID: idea.id)
+        try store.refresh()
+        #expect(store.recipes.first { $0.id == idea.id } == before)
+        #expect(store.recipes.count == 2)
+        #expect(throws: (any Error).self) { try store.deleteCollection(RecipeCollection.exploreID) }
+        #expect(throws: (any Error).self) { try store.saveCollection(.explore) }
+    }
+
+    @Test func exploreMembershipSurvivesCollectionSyncArrivingLater() async throws {
+        let store = try await makeStore()
+        let idea = Recipe(title: "Saved for later")
+        try store.saveToExplore(idea)
+        let context = store.persistence.container.viewContext
+        let object = try #require(context.fetch(NSFetchRequest<RecipeMO>(entityName: "Recipe")).first)
+        #expect(RecipeStore.domainRecipe(object, members: [], collections: []).isInExplore)
+        // A missing collection record must not change the recipe's destination.
+        for collection in try context.fetch(NSFetchRequest<RecipeCollectionMO>(entityName: "RecipeCollection")) {
+            context.delete(collection)
+        }
+        try context.save(); try store.refresh()
+        #expect(store.recipes.first?.isInExplore == true)
+        #expect(store.collections.filter { $0.id == RecipeCollection.exploreID }.count == 1)
+        try store.setMemberships([], recipeID: idea.id)
+        #expect(store.recipes.first?.isInExplore == false)
+        try store.setMemberships([RecipeCollection.exploreID], recipeID: idea.id)
+        #expect(store.recipes.first?.isInExplore == true)
     }
 
     @Test func chatCollectionsAndCollectionDropsPersistWithoutReplacingContent() async throws {

@@ -11,6 +11,7 @@ struct RecipeLibraryView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var filter: RecipeFilter
     var isSearch = false
+    var isExplore = false
     let transition: Namespace.ID
     let openRecipe: (RecipeRoute) -> Void
     @State private var showingAddRecipe = false
@@ -27,7 +28,9 @@ struct RecipeLibraryView: View {
     @StateObject private var discovery = RecipeDiscoveryModel()
     private var columnCount: Int { dynamicTypeSize.isAccessibilitySize ? 1 : 2 }
     private var columns: [GridItem] { Array(repeating: GridItem(.flexible(minimum: 0), spacing: 16, alignment: .top), count: columnCount) }
-    private var filteredRecipes: [Recipe] { store.recipes.filter { filter.matches($0, collections: store.collections, memberID: store.currentMemberID, members: store.members) } }
+    private var scope: RecipeBrowseScope { isSearch ? .all : (isExplore ? .explore : .recipes) }
+    private var scopedRecipes: [Recipe] { store.recipes.filter { scope.includes($0) } }
+    private var filteredRecipes: [Recipe] { scopedRecipes.filter { filter.matches($0, collections: store.collections, memberID: store.currentMemberID, members: store.members) } }
     private var allTags: [String] { Array(Set(store.recipes.flatMap(\.tags))).sorted() }
     private var libraryContent: some View {
         ScrollView {
@@ -39,25 +42,32 @@ struct RecipeLibraryView: View {
                         }.supperGlassButton().controlSize(.large).padding(.horizontal, 20)
                             .accessibilityIdentifier("openRecipeDiscovery")
                     }
-                    RecipeFilterChips(filter: $filter)
+                    RecipeFilterChips(filter: $filter, scope: scope)
+                }
+                if isExplore && !scopedRecipes.isEmpty && !filter.isActive {
+                    Text("Saved for another day. Move the keepers to My Recipes.")
+                        .font(.subheadline).foregroundStyle(.secondary).padding(.horizontal, 20)
                 }
                 if isSearch && !filter.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Button("Interpret this search", systemImage: "sparkle.magnifyingglass") { showingSearchAssistant = true }
                         .font(.subheadline).padding(.horizontal, 20)
                 }
                 if isSearch && !filter.isActive {
-                    Text("Search titles, ingredients, tags, notes and collections. You can also describe what you want, such as easy chicken under 30 minutes.")
+                    Text("Search My Recipes and Explore by title, ingredients, tags, notes or collections. You can also describe what you want, such as easy chicken under 30 minutes.")
                         .font(.subheadline).foregroundStyle(.secondary).padding(.horizontal, 20)
                 }
                 if filteredRecipes.isEmpty {
                     ContentUnavailableView {
-                        Label(store.recipes.isEmpty ? "No recipes yet" : "No matching recipes", systemImage: "fork.knife")
-                    } description: { Text(store.recipes.isEmpty ? "Save a photo and title, or import a recipe." : "Try another search or clear the filters.") } actions: {
+                        Label(filter.isActive ? "No matching recipes" : (isExplore ? "Something new for supper" : "No recipes yet"), systemImage: isExplore ? "safari" : "fork.knife")
+                    } description: {
+                        Text(filter.isActive ? "Try another search or clear the filters." : (isExplore ? "Keep recipes from What are you craving?, or add a recipe you'd like to try. They'll be waiting here." : "Save your go-to recipes here. Ideas for another day live in Explore."))
+                    } actions: {
                         if filter.isActive { Button("Clear filters") { filter = RecipeFilter() } }
+                        else if isExplore { Button("Add a recipe to try", systemImage: "plus") { showingAddRecipe = true }.supperGlassButton() }
                         else { Button("Add recipe") { showingAddRecipe = true }.supperGlassButton(prominent: true) }
                     }
                 } else {
-                    if !filter.isActive && !isSearch {
+                    if !filter.isActive && !isSearch && !isExplore {
                         ForEach(store.collectionSections.filter(\.isOnHome)) { collection in
                             if collection.id == RecipeCollection.allRecipesID { allRecipesGrid }
                             else { collectionCarousel(collection) }
@@ -71,7 +81,7 @@ struct RecipeLibraryView: View {
 
     private var allRecipesGrid: some View {
         VStack(alignment: .leading, spacing: 22) {
-            Text(filter.isActive ? "Results" : "All recipes").font(.title2.bold()).padding(.horizontal, 20)
+            Text(filter.isActive ? "Results" : (isExplore ? "To try" : (isSearch ? "All recipes" : "My recipes"))).font(.title2.bold()).padding(.horizontal, 20)
                 .contentTransition(.opacity)
             LazyVGrid(columns: columns, alignment: .leading, spacing: 24) {
                 ForEach(filteredRecipes) { recipeLink($0) }
@@ -80,7 +90,7 @@ struct RecipeLibraryView: View {
     }
 
     private func collectionCarousel(_ collection: RecipeCollection) -> some View {
-        let recipes = store.recipes.filter { $0.collectionIDs.contains(collection.id) }
+        let recipes = scopedRecipes.filter { $0.collectionIDs.contains(collection.id) }
         return VStack(alignment: .leading, spacing: 12) {
             Button { filter.collectionIDs = [collection.id] } label: {
                 HStack { Text(collection.name).font(.title2.bold()); Spacer(); Image(systemName: "arrow.right").font(.subheadline) }
@@ -114,7 +124,7 @@ struct RecipeLibraryView: View {
     var body: some View {
         libraryContent
         .background(SupperStyle.canvas)
-        .navigationTitle(isSearch ? "Search" : "Supper")
+        .navigationTitle(isSearch ? "Search" : (isExplore ? "Explore" : "Supper"))
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Menu("Library options", systemImage: "ellipsis") {
@@ -129,13 +139,15 @@ struct RecipeLibraryView: View {
             }
             if !isSearch {
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button("Collections", systemImage: "rectangle.stack") { showingCollections = true }.accessibilityIdentifier("editCollections")
-                        .accessibilityHint("Create collections and arrange homepage sections")
+                    if !isExplore {
+                        Button("Collections", systemImage: "rectangle.stack") { showingCollections = true }.accessibilityIdentifier("editCollections")
+                            .accessibilityHint("Create collections and arrange homepage sections")
+                    }
                     Button("Add recipe", systemImage: "plus") { showingAddRecipe = true }.accessibilityIdentifier("addRecipe")
                 }
             }
         }
-        .sheet(isPresented: $showingAddRecipe) { AddRecipeView() }
+        .sheet(isPresented: $showingAddRecipe) { AddRecipeView(initialCollectionIDs: isExplore ? [RecipeCollection.exploreID] : []) }
         .sheet(item: $editingRecipe) { AddRecipeView(recipe: $0) }
         .sheet(item: $groceryRecipe) { AddIngredientsToGroceryView(recipe: $0, servings: $0.servings) }
         .alert("Delete recipe?", isPresented: Binding(get: { deletingRecipe != nil }, set: { if !$0 { deletingRecipe = nil } }), presenting: deletingRecipe) { recipe in
@@ -159,8 +171,9 @@ struct RecipeLibraryView: View {
         }.buttonStyle(.plain)
             .contextMenu {
                 Button("Open recipe", systemImage: "arrow.up.right") { openRecipe(route) }
+                RecipeLocationButton(recipe: recipe)
                 Menu("Collection", systemImage: "folder") {
-                    ForEach(store.collections) { collection in
+                    ForEach(store.collections.filter { $0.id != RecipeCollection.exploreID }) { collection in
                         Toggle(collection.name, isOn: Binding(get: {
                             store.recipes.first(where: { $0.id == recipe.id })?.collectionIDs.contains(collection.id) ?? false
                         }, set: { selected in

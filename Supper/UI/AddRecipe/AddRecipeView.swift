@@ -19,10 +19,12 @@ struct AddRecipeView: View {
     @State private var task: Task<Void, Never>?
     @State private var householdID: UUID?
 
-    init(recipe: Recipe? = nil, onSaveDraft: ((Recipe) -> Void)? = nil) {
+    init(recipe: Recipe? = nil, initialCollectionIDs: Set<UUID> = [], onSaveDraft: ((Recipe) -> Void)? = nil) {
         original = recipe
         self.onSaveDraft = onSaveDraft
-        _draft = State(initialValue: recipe.map(RecipeDraft.init(recipe:)) ?? RecipeDraft())
+        var initial = recipe.map(RecipeDraft.init(recipe:)) ?? RecipeDraft()
+        if recipe == nil { initial.collectionIDs = initialCollectionIDs }
+        _draft = State(initialValue: initial)
         _urlText = State(initialValue: recipe?.sourceURL?.absoluteString ?? "")
     }
     var body: some View {
@@ -159,7 +161,9 @@ struct AddRecipeView: View {
         }, set: { draft = $0 })
     }
     private func imported(_ value: RecipeDraft) {
-        draft = value; urlText = value.sourceURL?.absoluteString ?? ""
+        var imported = value
+        imported.collectionIDs.formUnion(draft.collectionIDs)
+        draft = imported; urlText = value.sourceURL?.absoluteString ?? ""
         showingURLImport = false; showingAssistant = false
     }
     private func editorLink(_ title: String, systemImage: String, detail: String) -> some View {

@@ -39,6 +39,13 @@ struct RecipeDetailView: View {
                                     .accessibilityIdentifier("recipeTags")
                                 }.font(.subheadline)
                             }
+                            if preview == nil && recipe.isInExplore {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Label("Saved to try", systemImage: "safari")
+                                        .font(.subheadline).foregroundStyle(.secondary)
+                                    RecipeLocationButton(recipe: recipe).supperGlassButton()
+                                }
+                            }
                             servings(recipe)
                             if !recipe.ingredients.isEmpty && !recipe.steps.isEmpty {
                                 Picker("Recipe section", selection: $section) {
@@ -75,6 +82,7 @@ struct RecipeDetailView: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         if preview == nil {
                             Menu("Recipe options", systemImage: "ellipsis") {
+                                RecipeLocationButton(recipe: recipe)
                                 Button("Collections", systemImage: "folder") { showingCollections = true }
                                 if !recipe.ingredients.isEmpty {
                                     Button("Add to groceries", systemImage: "cart.badge.plus") { showingIngredients = true }

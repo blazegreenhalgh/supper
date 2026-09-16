@@ -1,5 +1,17 @@
 import Foundation
 
+public enum RecipeBrowseScope: Equatable, Sendable {
+    case recipes, explore, all
+
+    public func includes(_ recipe: Recipe) -> Bool {
+        switch self {
+        case .recipes: return !recipe.isInExplore
+        case .explore: return recipe.isInExplore
+        case .all: return true
+        }
+    }
+}
+
 public struct RecipeFilter: Equatable, Sendable {
     public var query = ""
     public var maximumMinutes: Int?

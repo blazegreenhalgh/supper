@@ -12,7 +12,7 @@ struct CollectionsView: View {
                     ForEach(store.collectionSections) { collection in
                         VStack(alignment: .leading, spacing: 10) {
                             if collection.id == RecipeCollection.allRecipesID {
-                                Label("All recipes", systemImage: "square.grid.2x2").font(.headline)
+                                Label("My recipes", systemImage: "square.grid.2x2").font(.headline)
                                 Text("Always on homepage").font(.subheadline).foregroundStyle(.secondary)
                             } else {
                                 Button { editing = collection } label: { Label(collection.name, systemImage: "folder").font(.headline) }.buttonStyle(.borderless)
@@ -34,11 +34,30 @@ struct CollectionsView: View {
                     }
                 } footer: { Text("Tap Edit to reorder homepage sections, or tap a collection to rename it. Hiding a section keeps its collection. Deleting a collection keeps all its recipes.") }
                 Button("New collection", systemImage: "folder.badge.plus") { editing = RecipeCollection(name: "", order: (store.collectionSections.filter { $0.order != Int.max }.map(\.order).max() ?? -1) + 1) }
+                Section {
+                    Label("Explore", systemImage: "safari")
+                } footer: {
+                    Text("Recipes saved for later have their own Explore tab. Move them to My Recipes when you want them in your regular rotation.")
+                }
             }.navigationTitle("Collections").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }; ToolbarItem(placement: .primaryAction) { EditButton() } }
                 .sheet(item: $editing) { CollectionEditorView(collection: $0) }
                 .supperError($error, title: "Couldn't update collection")
         }
+    }
+}
+
+struct RecipeLocationButton: View {
+    @EnvironmentObject private var store: RecipeStore
+    let recipe: Recipe
+
+    var body: some View {
+        Button(recipe.isInExplore ? "Move to My Recipes" : "Move to Explore", systemImage: recipe.isInExplore ? "fork.knife" : "safari") {
+            do { try store.setExplore(!recipe.isInExplore, recipeID: recipe.id) }
+            catch { store.errorMessage = error.localizedDescription }
+        }
+        .accessibilityIdentifier("moveRecipeLocation")
+        .accessibilityHint(recipe.isInExplore ? "Moves this recipe from Explore to your regular recipes" : "Saves this recipe for later in Explore")
     }
 }
 private struct CollectionEditorView: View {
@@ -68,7 +87,8 @@ struct CollectionMembershipView: View {
     var body: some View {
         NavigationStack {
             List {
-                if store.collections.isEmpty { Text("Open Collections on the Recipes screen to create a collection.").foregroundStyle(.secondary) }
+                Text("Explore keeps this recipe saved for later, separate from My Recipes. Other collections can be used in either place.")
+                    .font(.subheadline).foregroundStyle(.secondary)
                 ForEach(store.collections) { collection in
                     Toggle(collection.name, isOn: Binding(get: { selected.contains(collection.id) }, set: { on in if on { selected.insert(collection.id) } else { selected.remove(collection.id) } })).tint(Color(uiColor: .systemBlue))
                 }

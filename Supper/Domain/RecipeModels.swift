@@ -33,6 +33,7 @@ public struct Recipe: Identifiable, Hashable, Sendable {
     public var reactions: [RecipeReaction]
     public var collectionIDs: Set<UUID>
     public var createdAt: Date
+    public var isInExplore: Bool { collectionIDs.contains(RecipeCollection.exploreID) }
 
     public init(
         id: UUID = UUID(),
@@ -250,6 +251,9 @@ extension RecipeDraft {
 public struct RecipeCollection: Identifiable, Hashable, Sendable {
     /// A reserved homepage section, excluded from recipe memberships and filters.
     public static let allRecipesID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+    /// Shared membership in the built-in saved-for-later collection.
+    public static let exploreID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+    public static var explore: RecipeCollection { RecipeCollection(id: exploreID, name: "Explore") }
     public var id: UUID
     public var name: String
     public var isOnHome: Bool
