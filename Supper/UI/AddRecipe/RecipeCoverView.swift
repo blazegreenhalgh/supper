@@ -88,7 +88,10 @@ struct RecipeCoverView: View {
                         catch { self.error = error.localizedDescription; reviewing = nil }
                     }
                 }
-                .supperError($error, title: "Couldn’t prepare photo")
+                .alert("Couldn’t prepare photo", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } }), presenting: error) { details in
+                    Button("Copy details") { UIPasteboard.general.string = details }
+                    Button("OK", role: .cancel) { error = nil }
+                } message: { details in Text(details) }
         }
     }
 

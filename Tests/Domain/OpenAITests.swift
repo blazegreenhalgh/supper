@@ -47,6 +47,42 @@ import FoundationNetworking
         }
     }
 
+    @Test func rejectedPhotoSettingIncludesSafeDiagnosticDetails() throws {
+        let data = try JSONSerialization.data(withJSONObject: ["error": [
+            "code": "unsupported_parameter", "type": "invalid_request_error", "param": "input_fidelity",
+            "message": "Unsupported setting for \(fakeKey): private recipe and photo bytes"
+        ]])
+        let message = OpenAIClient.apiError(status: 400, data: data, requestID: "req_photo123").localizedDescription
+        #expect(message.contains("HTTP 400"))
+        #expect(message.contains("Code: unsupported_parameter"))
+        #expect(message.contains("Parameter: input_fidelity"))
+        #expect(message.contains("Request: req_photo123"))
+        #expect(!message.contains(fakeKey))
+        #expect(!message.contains("private recipe"))
+        #expect(!message.contains("photo bytes"))
+    }
+
+    @Test func untrustedDiagnosticFieldsCannotExposeKeysOrContent() throws {
+        let data = try JSONSerialization.data(withJSONObject: ["error": [
+            "code": fakeKey, "type": "private recipe", "param": "data:image/jpeg;base64,privatephoto", "message": fakeKey
+        ]])
+        let message = OpenAIClient.apiError(status: 400, data: data, requestID: fakeKey).localizedDescription
+        #expect(message.contains("HTTP 400"))
+        for privateValue in [fakeKey, "private recipe", "privatephoto"] { #expect(!message.contains(privateValue)) }
+    }
+
+    @Test func verificationAndModerationAreExplainedEvenForHTTP400() throws {
+        let verification = try JSONSerialization.data(withJSONObject: ["error": [
+            "type": "invalid_request_error", "message": "Your organization must be verified to use this model. \(fakeKey)"
+        ]])
+        let verificationMessage = OpenAIClient.apiError(status: 400, data: verification).localizedDescription
+        #expect(verificationMessage.contains("requires organization verification"))
+        #expect(!verificationMessage.contains(fakeKey))
+        let moderation = Data(#"{"error":{"code":"moderation_blocked","type":"image_generation_user_error"}}"#.utf8)
+        #expect(OpenAIClient.apiError(status: 400, data: moderation).localizedDescription.contains("image safety check"))
+        #expect(OpenAIClient.apiError(status: 415, data: Data()).localizedDescription.contains("upload format"))
+    }
+
     @Test func structuredRequestUsesSelectedModelAndNoStorage() async throws {
         let client = try makeClient { request in
             #expect(request.url?.host == "api.openai.com")
@@ -110,21 +146,37 @@ import FoundationNetworking
         await #expect(throws: (any Error).self) { try await client.generateCover(prompt: "naan") }
     }
 
-    @Test func foodPhotoEditUsesUploadedBytesAndHighFidelityEditingEndpoint() async throws {
+    @Test func foodPhotoEditUploadsJPEGAsMultipartWithoutFidelityOverride() async throws {
         let original = Data([0xff, 0xd8, 1, 2, 3, 0xff, 0xd9])
         let edited = Data([4, 5, 6])
+        let prompt = "Preserve the food; improve lighting.\nТёплый свет 🍲"
         let client = try makeClient { request in
+            #expect(request.httpMethod == "POST")
             #expect(request.url?.path == "/v1/images/edits")
-            let body = try Self.body(request)
-            #expect(body["model"] as? String == "gpt-image-2.5-sunburst")
-            #expect(body["input_fidelity"] as? String == "high")
-            #expect(body["n"] as? Int == 1)
-            #expect(body["output_format"] as? String == "jpeg")
-            #expect(body["output_compression"] as? Int == 90)
-            #expect((body["images"] as? [[String: String]]) == [["image_url": "data:image/jpeg;base64,\(original.base64EncodedString())"]])
+            #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer \(fakeKey)")
+            let contentType = try #require(request.value(forHTTPHeaderField: "Content-Type"))
+            #expect(contentType.hasPrefix("multipart/form-data; boundary="))
+            let boundary = try #require(contentType.components(separatedBy: "boundary=").last)
+            let body = Self.requestBody(request)
+            let imageHeader = Data("Content-Disposition: form-data; name=\"image[]\"; filename=\"food-photo.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n".utf8)
+            let imageStart = try #require(body.range(of: imageHeader)).upperBound
+            let ending = Data("\r\n--\(boundary)--\r\n".utf8)
+            #expect(body.suffix(ending.count) == ending)
+            #expect(Data(body[imageStart..<(body.count - ending.count)]) == original)
+            let fields = String(decoding: body[..<imageStart], as: UTF8.self)
+            #expect(fields.hasPrefix("--\(boundary)\r\n"))
+            for (name, value) in [
+                ("model", "gpt-image-2.5-sunburst"), ("prompt", prompt), ("size", "1024x1024"),
+                ("quality", "medium"), ("n", "1"), ("output_format", "jpeg"), ("output_compression", "90")
+            ] {
+                #expect(fields.contains("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n"))
+            }
+            #expect(!fields.contains("input_fidelity"))
+            #expect(!fields.contains("data:image/"))
+            #expect(!fields.contains(fakeKey))
             return (200, try JSONSerialization.data(withJSONObject: ["data": [["b64_json": edited.base64EncodedString()]]]))
         }
-        #expect(try await client.enhanceFoodPhoto(jpeg: original, prompt: "Preserve the food; improve lighting.") == edited)
+        #expect(try await client.enhanceFoodPhoto(jpeg: original, prompt: prompt) == edited)
     }
 
     @Test(.timeLimit(.minutes(1))) func stalledPhotoResponseTimesOutAndCancelsTransport() async throws {
@@ -174,7 +226,7 @@ import FoundationNetworking
         let client = try makeClient { _ in
             calls += 1
             if calls == 1 {
-                return (403, Data("{\"error\":{\"message\":\"\(fakeKey) private photo\"}}".utf8))
+                return (400, Data("{\"error\":{\"code\":\"invalid_value\",\"param\":\"image\",\"message\":\"\(fakeKey) private photo\"}}".utf8))
             }
             return (200, try JSONSerialization.data(withJSONObject: ["data": [["b64_json": edited.base64EncodedString()]]]))
         }
@@ -182,7 +234,9 @@ import FoundationNetworking
             _ = try await client.enhanceFoodPhoto(jpeg: Data([1]), prompt: "Polish")
             Issue.record("A rejected request must fail")
         } catch {
-            #expect(error.localizedDescription.contains("permission"))
+            #expect(error.localizedDescription.contains("HTTP 400"))
+            #expect(error.localizedDescription.contains("Parameter: image"))
+            #expect(error.localizedDescription.contains("Request: req_mock_photo"))
             #expect(!error.localizedDescription.contains(fakeKey))
             #expect(!error.localizedDescription.contains("private photo"))
         }
@@ -252,13 +306,16 @@ import FoundationNetworking
         return URLSession(configuration: config)
     }
     private static func body(_ request: URLRequest) throws -> [String: Any] {
+        try #require(JSONSerialization.jsonObject(with: requestBody(request)) as? [String: Any])
+    }
+    private static func requestBody(_ request: URLRequest) -> Data {
         var data = request.httpBody ?? Data()
         if data.isEmpty, let stream = request.httpBodyStream {
             stream.open(); defer { stream.close() }
             var buffer = [UInt8](repeating: 0, count: 1024)
             while stream.hasBytesAvailable { let count = stream.read(&buffer, maxLength: buffer.count); if count <= 0 { break }; data.append(contentsOf: buffer.prefix(count)) }
         }
-        return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        return data
     }
 }
 
@@ -285,7 +342,7 @@ private final class MockOpenAIProtocol: URLProtocol, @unchecked Sendable {
     override func startLoading() {
         do {
             let (status, data) = try Self.handler!(request)
-            client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: ["x-request-id": "req_mock_photo"])!, cacheStoragePolicy: .notAllowed)
             client?.urlProtocol(self, didLoad: data)
             client?.urlProtocolDidFinishLoading(self)
         } catch { client?.urlProtocol(self, didFailWithError: error) }

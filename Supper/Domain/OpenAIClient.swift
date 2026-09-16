@@ -85,12 +85,21 @@ public struct OpenAIClient: Sendable {
         guard !jpeg.isEmpty, jpeg.count <= 10_000_000, !prompt.isEmpty, prompt.count <= 20_000 else {
             throw SupperError.invalid("Choose a smaller food photo or shorten the edit request.")
         }
-        let data = try await request(path: "images/edits", body: [
-            "model": Self.imageEditModel, "prompt": prompt,
-            "images": [["image_url": "data:image/jpeg;base64,\(jpeg.base64EncodedString())"]],
-            "input_fidelity": "high", "size": "1024x1024", "quality": "medium", "n": 1,
-            "output_format": "jpeg", "output_compression": 90
-        ])
+        // Match the Images API's file-upload example for Sunburst. Do not send
+        // an optional input_fidelity override; preservation is specified in the prompt.
+        let boundary = "SupperPhoto-\(UUID().uuidString)"
+        var upload = Data()
+        for (name, value) in [
+            ("model", Self.imageEditModel), ("prompt", prompt), ("size", "1024x1024"),
+            ("quality", "medium"), ("n", "1"), ("output_format", "jpeg"), ("output_compression", "90")
+        ] {
+            upload.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".utf8))
+        }
+        upload.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"image[]\"; filename=\"food-photo.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n".utf8))
+        upload.append(jpeg)
+        upload.append(Data("\r\n--\(boundary)--\r\n".utf8))
+        let data = try await request(path: "images/edits", method: "POST", payload: upload,
+                                     contentType: "multipart/form-data; boundary=\(boundary)")
         return try Self.imageResult(data)
     }
 
@@ -123,20 +132,27 @@ public struct OpenAIClient: Sendable {
     }
 
     private func request(path: String, body: [String: Any]?) async throws -> Data {
+        let payload = try body.map { try JSONSerialization.data(withJSONObject: $0) }
+        return try await request(path: path, method: body == nil ? "GET" : "POST", payload: payload, contentType: "application/json")
+    }
+
+    private func request(path: String, method: String, payload: Data?, contentType: String) async throws -> Data {
         try Task.checkCancellation()
         let isImageRequest = path.hasPrefix("images/")
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/\(path)")!)
-        request.httpMethod = body == nil ? "GET" : "POST"
+        request.httpMethod = method
         request.timeoutInterval = isImageRequest ? 240 : 90
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = payload
         do {
             let (data, response) = try await self.response(for: request, timeout: isImageRequest ? imageRequestTimeout : .seconds(90))
             try Task.checkCancellation()
             guard let http = response as? HTTPURLResponse else { throw OpenAIResponse.invalid }
-            guard (200..<300).contains(http.statusCode) else { throw Self.apiError(status: http.statusCode, data: data) }
+            guard (200..<300).contains(http.statusCode) else {
+                throw Self.apiError(status: http.statusCode, data: data, requestID: http.value(forHTTPHeaderField: "x-request-id"))
+            }
             guard data.count <= 24_000_000 else { throw OpenAIResponse.invalid }
             return data
         } catch is CancellationError { throw CancellationError() }
@@ -168,21 +184,59 @@ public struct OpenAIClient: Sendable {
         }
     }
 
-    public static func apiError(status: Int, data: Data) -> SupperError {
-        // Never display provider messages: they may echo prompts, identifiers or secrets.
+    public static func apiError(status: Int, data: Data, requestID: String? = nil) -> SupperError {
+        // Provider prose can echo keys, prompts or image bytes. Only display
+        // allowlisted machine fields and the provider's opaque request identifier.
         let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-        let code = (body?["error"] as? [String: Any])?["code"] as? String
-        if code == "insufficient_quota" || code == "billing_hard_limit_reached" {
-            return .invalid("Your OpenAI API account needs credits or has reached its spending limit. Check API billing; a ChatGPT subscription doesn’t cover this usage.")
+        let error = body?["error"] as? [String: Any]
+        let code = error?["code"] as? String
+        let parameter = error?["param"] as? String
+        let providerMessage = (error?["message"] as? String)?.lowercased() ?? ""
+        let knownCodes: Set<String> = [
+            "insufficient_quota", "billing_hard_limit_reached", "billing_not_active", "invalid_api_key",
+            "model_not_found", "model_not_available", "permission_denied", "organization_verification_required",
+            "unsupported_parameter", "unsupported_value", "unknown_parameter", "invalid_parameter", "invalid_value", "invalid_request_error",
+            "missing_required_parameter", "invalid_image", "invalid_image_format", "invalid_image_url", "image_parse_error",
+            "image_too_large", "image_generation_user_error", "moderation_blocked", "content_policy_violation",
+            "rate_limit_exceeded", "server_error"
+        ]
+        let knownParameters: Set<String> = [
+            "model", "prompt", "image", "image[]", "images", "images[0]", "images[0].image_url", "image_url",
+            "input_fidelity", "size", "quality", "n", "output_format", "output_compression", "response_format",
+            "background", "mask", "moderation", "stream", "partial_images"
+        ]
+        var details = ["HTTP \(status)"]
+        if let code, knownCodes.contains(code) { details.append("Code: \(code)") }
+        if let type = error?["type"] as? String, knownCodes.contains(type), type != code { details.append("Type: \(type)") }
+        if let parameter, knownParameters.contains(parameter) { details.append("Parameter: \(parameter)") }
+        if let requestID, requestID.hasPrefix("req_"), requestID.count <= 128,
+           requestID.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }) {
+            details.append("Request: \(requestID)")
         }
-        switch status {
-        case 401: return .invalid("OpenAI rejected this key. Replace it in Settings → AI, then try again.")
-        case 403: return .invalid("This key doesn’t have permission for that model or endpoint. Check its project permissions and any required OpenAI verification.")
-        case 404: return .invalid("The selected OpenAI model isn’t available to this API project. Check model access in your OpenAI account.")
-        case 429: return .invalid("OpenAI’s request limit was reached. Wait a moment and try again, or check your API usage limits.")
-        case 500...599: return .invalid("OpenAI is temporarily unavailable. Try again shortly; your recipe hasn’t changed.")
-        default: return .invalid("OpenAI couldn’t complete this request. Check your model access or try a smaller request. Nothing has changed.")
+        let message: String
+        if ["insufficient_quota", "billing_hard_limit_reached", "billing_not_active"].contains(code ?? "") {
+            message = "Your OpenAI API account needs credits or has reached its spending limit. Check API billing; a ChatGPT subscription doesn’t cover this usage."
+        } else if code == "organization_verification_required" ||
+                    ([400, 403].contains(status) && providerMessage.contains("organization must be verified")) {
+            message = "OpenAI requires organization verification to use this image model. Complete verification in your OpenAI account, then try again."
+        } else if code == "moderation_blocked" || code == "content_policy_violation" {
+            message = "OpenAI’s image safety check rejected this request. Try another photo or simpler style preferences. Your original photo is unchanged."
+        } else if code == "model_not_found" || code == "model_not_available" {
+            message = "The selected OpenAI model isn’t available to this API project. Check model access in your OpenAI account."
+        } else {
+            switch status {
+            case 400, 422: message = "OpenAI rejected the request or one of its settings. Copy the error details below to help identify the cause. Nothing has changed."
+            case 401: message = "OpenAI rejected this key. Replace it in Settings → AI, then try again."
+            case 403: message = "This key doesn’t have permission for that model or endpoint. Check its project permissions and any required OpenAI verification."
+            case 404: message = "The selected OpenAI model isn’t available to this API project. Check model access in your OpenAI account."
+            case 413: message = "OpenAI rejected the image size. Try a smaller photo. Your original photo is unchanged."
+            case 415: message = "OpenAI rejected the upload format. Update Supper and choose the photo again. Your original photo is unchanged."
+            case 429: message = "OpenAI’s request limit was reached. Wait a moment and try again, or check your API usage limits."
+            case 500...599: message = "OpenAI is temporarily unavailable. Try again shortly; your recipe hasn’t changed."
+            default: message = "OpenAI couldn’t complete this request. Copy the error details below to help identify the cause. Nothing has changed."
+            }
         }
+        return .invalid(message + "\n\n" + details.joined(separator: "\n"))
     }
 }
 
