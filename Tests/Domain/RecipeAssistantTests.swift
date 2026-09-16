@@ -199,7 +199,7 @@ private let sauceRequest = "Find a sauce for four with beef stock, heavy cream, 
 
 @Test func sauceCanUsePublishedFoundationWithoutExactSeasoningMatch() throws {
     let (draft, source, edit) = sauceFixture()
-    let changed = try #require(edit.validatedDraft(draft, sources: [source], userInput: sauceRequest))
+    let changed = try #require(try edit.validatedDraft(draft, sources: [source], userInput: sauceRequest))
     #expect(changed.ingredients.map(\.quantity) == ["250", "100", "1", "1", "1/4", "1/4"])
     #expect(changed.steps[0].text == source.steps[0].text)
     let notes = edit.adaptationNotes(source: source)
