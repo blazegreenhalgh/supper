@@ -294,6 +294,58 @@ import FoundationNetworking
 
     @Test func discoveryHasNoGenerationMode() { #expect(RecipeDiscoveryMode.allCases == [.online]) }
 
+    @Test func editorPlanningAsksBeforeSearchingAndPreservesFollowupContext() async throws {
+        let client = try makeClient { request in
+            let body = try Self.body(request)
+            #expect(body["store"] as? Bool == false)
+            #expect((body["input"] as? String)?.contains("heavy cream, stock, soy sauce") == true)
+            let answer = #"{"question":"How many servings of sauce do you need?","searchRequest":""}"#
+            return (200, try JSONSerialization.data(withJSONObject: ["status": "completed", "output": [
+                ["type": "message", "content": [["type": "output_text", "text": answer]]]
+            ]]))
+        }
+        let plan = try await client.planRecipeEdit(request: "Find the method", context: "We used heavy cream, stock, soy sauce")
+        #expect(plan.searchRequest.isEmpty)
+        #expect(plan.question.contains("servings"))
+        #expect(throws: (any Error).self) { try RecipeEditPlan(question: "How many?", searchRequest: "cream sauce").validate() }
+        #expect(throws: (any Error).self) { try RecipeEditPlan(question: "", searchRequest: "").validate() }
+    }
+
+    @Test func groundedEditorAcceptsClarificationWithoutSourceOrMutation() async throws {
+        let client = try makeClient { request in
+            let body = try Self.body(request)
+            #expect((body["instructions"] as? String)?.contains("preserve its core liquid-to-flour ratios") == true)
+            let answer = #"{"outcome":"clarification","sourceIndex":-1,"message":"How much beef are you cooking?","baseRationale":"","assumptions":[],"ingredientAdaptations":[],"methodAdaptations":[],"patch":{"title":null,"servings":null,"durationMinutes":null,"ingredients":[],"steps":[]}}"#
+            return (200, try JSONSerialization.data(withJSONObject: ["status": "completed", "output": [
+                ["type": "message", "content": [["type": "output_text", "text": answer]]]
+            ]]))
+        }
+        let draft = RecipeDraft(title: "Beef dinner")
+        let edit = try await client.groundedRecipeEdit(request: "Add sauce", draft: draft, sources: [], userInput: "Add sauce", conversation: "")
+        #expect(edit.outcome == .clarification)
+        #expect(try edit.validatedDraft(draft, sources: [], userInput: "Add sauce") == nil)
+    }
+
+    @Test func adaptationReviewerBlocksChangedTechnique() async throws {
+        let client = try makeClient { request in
+            let body = try Self.body(request)
+            let input = try #require(body["input"] as? String)
+            #expect(input.contains("Do not boil"))
+            #expect(input.contains("Boil hard"))
+            let answer = #"{"baseFits":true,"coreRatiosPreserved":true,"techniquePreserved":false,"changesExplained":false,"ingredientsConsistent":true,"yieldMatches":true,"question":"","concern":"The base requires gentle heat; hard boiling changes its technique."}"#
+            return (200, try JSONSerialization.data(withJSONObject: ["status": "completed", "output": [
+                ["type": "message", "content": [["type": "output_text", "text": answer]]]
+            ]]))
+        }
+        let source = RecipeDraft(title: "Cream sauce", steps: [.init(text: "Do not boil.")])
+        let edit = GroundedRecipeEdit(outcome: .adapted, sourceIndex: 0, message: "Adapt it.", baseRationale: "Cream sauce",
+            assumptions: [], ingredientAdaptations: [], methodAdaptations: [.init(patchIndex: 0, sourceIndices: [0], reason: "Change the heat.")],
+            patch: .init(steps: [.init(operation: .add, text: "Boil hard.")]))
+        let review = try await client.reviewRecipeAdaptation(edit, draft: .init(), source: source, userInput: "Add cream sauce")
+        #expect(!review.approved)
+        #expect(!review.techniquePreserved)
+    }
+
     private func makeClient(_ handler: @escaping (URLRequest) throws -> (Int, Data)) throws -> OpenAIClient {
         MockOpenAIProtocol.handler = handler
         let config = URLSessionConfiguration.ephemeral

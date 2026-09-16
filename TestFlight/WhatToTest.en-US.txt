@@ -1,3 +1,5 @@
+Recipe chat: adapt your own dish from a published base recipe. Try the cream/stock/flour sauce with soy sauce and rosemary. Answer any missing-yield question, then review the foundation, estimated seasonings and method adaptations before applying. Changes that cannot be supported should ask a question or decline. Confirm source links, assumptions and adaptation notes remain after saving, and Undo restores the previous draft.
+
 New: describe what you’re craving to find recipes online or create them with Apple Intelligence. Tap the stack to preview/edit, swipe right to keep or left to discard, undo a discard, and switch to grid view. Only kept recipes are saved to your household.
 
 Library management and iCloud feedback:

@@ -18,17 +18,23 @@ This is personal bring-your-own-key, not a shared app-owner credential. Before d
 - Online covers: chat or Generate cover → Find online searches actual web-tool sources, or reads an explicit public HTTPS recipe/photo link. Photos come only from downloaded JSON-LD/Open Graph/Twitter metadata or a supplied image URL, never model-written image URLs. Downloads enforce public HTTPS on redirects, content/size limits and real image decoding; source and image links are retained in Notes. No generation fallback is used if search fails.
 - Small ingredient formatting, tag suggestions and cookbook filter interpretation remain on-device. Manual editing, title-only saving, deterministic quantities and URL import do not require a key.
 
-## Published recipes only
+## Published discovery and grounded recipe edits
 
 There is no Create with AI discovery mode. The API must run its web-search tool; URLs are accepted only from completed tool results, not fabricated prose or citations. A public HTTPS URL explicitly pasted in the current request can be read directly instead.
 
 Supper downloads those recipe pages and requires complete structured ingredients/methods before accepting them. Search snippets are never used as recipe content. Selection is one bounded model request across downloaded candidates; the model returns indexes, not generated recipes. Hard requirements with missing evidence must be rejected. Missing/blocked sources produce an actionable error, never model-memory fallback.
 
-For recipe edits, chat selects one supporting downloaded recipe, returns a bounded patch and passes source-evidence validation. New ingredient amounts must match complete source rows or literal user input. New method steps must match complete source steps or literal user input. Recipe patches cannot invent cooking times, omit parts of source steps, or overwrite photos, tags, collections, notes, original source URLs or reactions. Group labels and explicit user edits are permitted; departures from the source must be explained for review. Scaling in chat directs the user to the existing servings control rather than generating quantities.
+For recipe edits, chat first checks whether essential facts are missing (for example the yield or amount of meat when reconstructing a home dish). It asks one question before searching when needed, and retains earlier user details for follow-up answers. It searches for a compatible published base recipe with the right core ingredients and technique; herbs and condiments do not need to match exactly.
+
+Exact imports and unadapted rows retain source-evidence validation. Modest adaptations can use a named user ingredient at the source amount, or a clearly labelled conservative seasoning estimate. Each adapted ingredient identifies the source row (or an added seasoning); each changed method identifies its source steps and explains the departure. Core quantity/unit changes cannot pass as substitutions, and unannotated changes still require exact source or literal user evidence. No generated recipe fallback is used when a suitable base cannot be downloaded.
+
+A separate model request checks adapted proposals against the downloaded base and complete resulting recipe: base suitability, core ratios, cooking technique, disclosed changes, ingredient/method consistency and yield. All checks must pass before a proposal is shown. A missing fact becomes a normal clarification; a rejected adaptation does not change the draft or replace an earlier pending proposal. This semantic check is model-based and does not establish that the adaptation works in a kitchen.
+
+Chat and the native review sheet distinguish the published foundation from substitutions, estimated seasonings and method changes, with a clear statement that adaptations have not been kitchen-tested. Applying retains the source links, adaptation notes and assumptions in recipe Notes, including when the base source URL was already present. Apply/Save/Cancel, stale-draft protection and Undo continue to work as before. Photos, tags, collections, original source URLs and household metadata remain outside the recipe patch. Scaling continues to use the deterministic servings control.
 
 One small structured request routes natural-language chat to recipe editing, collections, online photos, generation from the recipe or generation from a food reference. A request to generate a new image using the user's photo takes the food-reference route. Ambiguous photo requests show explicit choices. The photo menu bypasses routing when the user has already selected an action. Photo actions operate separately from recipe evidence validation and only change the image plus its credit after review.
 
-Collection requests use the active household's actual collection IDs and names. Add preserves other memberships; move removes only the named source; remove affects only the named collections. A separate proposal lists additions and removals. Applying it updates `RecipeDraft.collectionIDs`, and the app generates the confirmation from that result. Save persists the selection; Cancel discards it. Changed selections, missing IDs, conflicting operations and household changes block application. Recipe content can continue to be edited while this request runs. Collection organisation does not need web research; recipe content edits still require source evidence. Creating or deleting collections stays in Manage collections.
+Collection requests use the active household's actual collection IDs and names. Add preserves other memberships; move removes only the named source; remove affects only the named collections. A separate proposal lists additions and removals. Applying it updates `RecipeDraft.collectionIDs`, and the app generates the confirmation from that result. Save persists the selection; Cancel discards it. Changed selections, missing IDs, conflicting operations and household changes block application. Recipe content can continue to be edited while this request runs. Collection organisation does not need web research; recipe content edits still require a downloaded foundation and evidence or disclosed adaptations. Creating or deleting collections stays in Manage collections.
 
 A citation does not certify a recipe's safety or suitability. Users must still review matches, exclusions and any requested adaptations.
 
@@ -62,7 +68,7 @@ Rejected requests include the HTTP status, allowlisted API error code/type and p
 
 ## Verification
 
-Mocked transport tests cover model IDs, structured output, required search, source provenance, malformed/refused/incomplete responses, sanitized billing errors, key input validation, connection testing and image responses. Evidence tests reject invented ingredient amounts and altered/incomplete method steps. Existing draft/undo, quantity, formatting and discovery regressions remain.
+Mocked transport tests cover model IDs, structured output, required search, source provenance, malformed/refused/incomplete responses, sanitized billing errors, key input validation, connection testing and image responses. Evidence tests reject invented core amounts and undisclosed method changes. Grounded-edit tests cover the cream/stock sauce case, missing and fabricated sources, invalid adaptation references, follow-up ingredient facts, clarification without mutation, review rejection and persisted adaptation notes with Undo. Mocked transport tests exercise planning, normal clarification and the separate adaptation reviewer without paid requests. Existing draft/undo, quantity, formatting and discovery regressions remain.
 
 UI coverage includes opening AI settings, saving/replacing/removing a fixture key, persistence across app relaunch, chat dismissal/reopening across ingredient/step navigation, native detent resizing, composer sizing and keyboard clearance, preview removals, stale and unfinished-edit protection, apply/undo, and existing discovery flows. A deterministic proposal is available only in DEBUG builds with both `--ui-testing` and `--recipe-chat-ui-testing`. No real key or live generation is needed for CI.
 
@@ -72,12 +78,13 @@ CI ad-hoc-signs simulator builds with `Tests/UI/Simulator.entitlements` so real 
 
 Live acceptance after entering a funded key:
 1. Test connection; find published recipes with exclusions and duration constraints. Verify each source.
-2. Create “Naan bread pizza” with only its title. Ask for just naan ingredients and method, inspect the source/yield and unchanged pizza content, then Apply, Undo and Save.
-3. Paste a recipe URL; try a blocked/non-recipe page and verify no recipe is invented.
-4. Import recipe text/photo and check it against the original.
-5. Generate a cover, dismiss without applying, generate again and explicitly accept.
+2. Start a home recipe and ask for ingredients/method using cream, beef stock, soy sauce, flour, pepper and rosemary. Answer any yield question. Verify the published foundation, preserved core amounts, labelled seasoning estimates and explanation of method changes. Review, Apply, Save and reopen to check source/adaptation Notes. Request a structural substitution or incompatible yield and verify it asks for clarification or declines.
+3. Create “Naan bread pizza” with only its title. Ask for just naan ingredients and method, inspect the source/yield and unchanged pizza content, then Apply, Undo and Save.
+4. Paste a recipe URL; try a blocked/non-recipe page and verify no recipe is invented.
+5. Import recipe text/photo and check it against the original.
+6. Generate a cover, dismiss without applying, generate again and explicitly accept.
    Ask chat to find an online photo, verify the source, preview and use it. Also try a direct photo URL and a blocked page. Upload a portrait food photo via Generate cover → Create from my photo; verify the result is a new top-down cookbook scene depicting the reference food, switch repeatedly between Original and Generated, apply, save and reopen.
-6. Check step ingredient references and exact recipe amounts.
-7. Remove the key, test offline/manual entry and on-device formatting.
+7. Check step ingredient references and exact recipe amounts.
+8. Remove the key, test offline/manual entry and on-device formatting.
 
 Live model quality/latency, account availability, credits and image verification cannot be established by mocked tests.
