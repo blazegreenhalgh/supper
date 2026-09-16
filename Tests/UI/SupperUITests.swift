@@ -456,9 +456,10 @@ import XCTest
         XCTAssertEqual(XCTWaiter.wait(for: [match], timeout: 5), .completed)
     }
 
-    private func launch(dark: Bool = false) -> XCUIApplication {
+    private func launch(dark: Bool = false, disableAnimations: Bool = false) -> XCUIApplication {
         let app = XCUIApplication(); app.launchArguments = ["--ui-testing"]
         if dark { app.launchArguments.append("--ui-testing-dark") }
+        if disableAnimations { app.launchArguments.append("--ui-testing-disable-animations") }
         app.launch()
         XCTAssertTrue(app.buttons["recipe-test-chicken"].waitForExistence(timeout: 15))
         return app
@@ -565,7 +566,9 @@ import XCTest
     }
 
     func testIngredientAndSectionDragsPersistOnSave() {
-        let app = launch(); openRecipe(app)
+        // Match the recipe-card drag test: simulator lift animations can hold the
+        // preview at its origin while XCTest has already sent the drag movement.
+        let app = launch(disableAnimations: true); openRecipe(app)
         app.buttons["editRecipe"].tap(); app.buttons["editIngredients"].tap()
         XCTAssertTrue(app.buttons["addRecipeSection"].waitForExistence(timeout: 5), app.debugDescription)
         app.buttons["addRecipeSection"].tap()
