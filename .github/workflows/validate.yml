@@ -56,13 +56,29 @@ jobs:
               selection+=("-skip-testing:SupperUITests/SupperUITests/$test_name")
             fi
           done
-          xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath UIResults "${selection[@]}" test-without-building
+          set +e
+          xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath UIResults "${selection[@]}" test-without-building 2>&1 | tee UITestRun.log
+          test_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$test_status" -eq 0 ]; then exit 0; fi
+          if [ "$test_status" -ne 65 ]; then exit "$test_status"; fi
+          # Retry only known simulator lifecycle failures after a complete run.
+          # Assertions, unknown errors and incomplete runs remain failures.
+          retry_ids=$(python3 .github/scripts/simulator_retries.py UITestRun.log "${selection[@]}") || exit "$test_status"
+          retry_selection=()
+          while IFS= read -r test_id; do
+            retry_selection+=("-only-testing:$test_id")
+          done <<< "$retry_ids"
+          echo "::warning::Retrying simulator lifecycle failures once; see UITestRun.log for the original results."
+          xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath UIRetryResults "${retry_selection[@]}" test-without-building
       - name: Export UI screenshots
         if: always()
         run: |
-          if [ -d UIResults.xcresult ]; then
-            xcrun xcresulttool export attachments --path UIResults.xcresult --output-path UITestAttachments
-          fi
+          for result in UIResults UIRetryResults; do
+            if [ -d "$result.xcresult" ]; then
+              xcrun xcresulttool export attachments --path "$result.xcresult" --output-path "UITestAttachments/$result"
+            fi
+          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -70,3 +86,5 @@ jobs:
           path: |
             UITestAttachments
             UIResults.xcresult
+            UIRetryResults.xcresult
+            UITestRun.log
