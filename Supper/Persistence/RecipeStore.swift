@@ -27,7 +27,7 @@ final class RecipeStore: ObservableObject {
     private static let tagCatalogOrder = Int.min
     @Published private(set) var allRecipesSection = RecipeCollection(id: RecipeCollection.allRecipesID, name: "All recipes", isOnHome: true, order: Int.max)
     var collectionSections: [RecipeCollection] {
-        (collections + [allRecipesSection]).sorted {
+        (collections.filter { $0.id != RecipeCollection.exploreID } + [allRecipesSection]).sorted {
             $0.order == $1.order ? $0.id.uuidString < $1.id.uuidString : $0.order < $1.order
         }
     }
@@ -124,6 +124,23 @@ final class RecipeStore: ObservableObject {
             if try fetchRecipeObject(recipe.id, context: context) != nil { return }
             let object = RecipeMO(entity: NSEntityDescription.entity(forEntityName: "Recipe", in: context)!, insertInto: context); assign(object, root: root, context: context)
             object.library = root; apply(recipe, to: object, context: context, root: root)
+        }
+    }
+    func saveToExplore(_ recipe: Recipe) throws {
+        var saved = recipe
+        saved.collectionIDs.insert(RecipeCollection.exploreID)
+        try addRecipe(saved)
+    }
+
+    func setExplore(_ isInExplore: Bool, recipeID: UUID) throws {
+        try mutate { context, root in
+            guard let recipe = try fetchRecipeObject(recipeID, context: context) else { throw SupperError.invalid("Recipe no longer available.") }
+            var ids = Set(Self.decodeUUIDs(recipe.collectionIDsJSON))
+            if isInExplore {
+                ensureExploreCollection(context: context, root: root)
+                ids.insert(RecipeCollection.exploreID)
+            } else { ids.remove(RecipeCollection.exploreID) }
+            recipe.collectionIDsJSON = Self.encodeUUIDs(Array(ids))
         }
     }
     func updateRecipe(_ recipe: Recipe) throws {
@@ -277,6 +294,7 @@ final class RecipeStore: ObservableObject {
 
     func saveCollection(_ collection: RecipeCollection) throws {
         guard collection.id != RecipeCollection.allRecipesID else { throw SupperError.invalid("All recipes is a built-in section.") }
+        guard collection.id != RecipeCollection.exploreID else { throw SupperError.invalid("Explore is a built-in collection.") }
         guard !collection.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw SupperError.invalid("Give the collection a name.") }
         try mutate { context, root in
             let existing = (root.collections?.allObjects as? [RecipeCollectionMO] ?? []).first { $0.id == collection.id }
@@ -288,6 +306,7 @@ final class RecipeStore: ObservableObject {
     }
     func deleteCollection(_ id: UUID) throws {
         guard id != RecipeCollection.allRecipesID else { throw SupperError.invalid("All recipes cannot be deleted.") }
+        guard id != RecipeCollection.exploreID else { throw SupperError.invalid("Explore cannot be deleted. Move its recipes to My Recipes instead.") }
         try mutate { _, root in
             for object in root.collections?.allObjects as? [RecipeCollectionMO] ?? [] where object.id == id { object.removed = true }
         }
@@ -313,8 +332,9 @@ final class RecipeStore: ObservableObject {
     }
     func setMemberships(_ ids: Set<UUID>, recipeID: UUID) throws {
         guard ids.isSubset(of: Set(collections.map(\.id))) else { throw SupperError.invalid("A collection is no longer available.") }
-        try mutate { context, _ in
+        try mutate { context, root in
             guard let recipe = try fetchRecipeObject(recipeID, context: context) else { throw SupperError.invalid("Recipe no longer available.") }
+            if ids.contains(RecipeCollection.exploreID) { ensureExploreCollection(context: context, root: root) }
             recipe.collectionIDsJSON = Self.encodeUUIDs(Array(ids))
         }
     }
@@ -442,7 +462,11 @@ final class RecipeStore: ObservableObject {
         }.sorted { $0.order == $1.order ? $0.id.uuidString < $1.id.uuidString : $0.order < $1.order }
         allRecipesSection = storedSections.first { $0.id == RecipeCollection.allRecipesID }
             ?? RecipeCollection(id: RecipeCollection.allRecipesID, name: "All recipes", isOnHome: true, order: Int.max)
-        collections = storedSections.filter { $0.id != RecipeCollection.allRecipesID && $0.order != Self.tagCatalogOrder }
+        // Project Explore even before its record syncs, so out-of-order CloudKit
+        // delivery never makes a saved-for-later recipe appear in My Recipes.
+        collections = [RecipeCollection.explore] + storedSections.filter {
+            $0.id != RecipeCollection.allRecipesID && $0.id != RecipeCollection.exploreID && $0.order != Self.tagCatalogOrder
+        }
         recipes = (root.recipes?.allObjects as? [RecipeMO] ?? []).map { Self.domainRecipe($0, members: members, collections: collections) }.sorted { $0.createdAt > $1.createdAt }
         let declaredTags = storedSections.filter { $0.order == Self.tagCatalogOrder }.map(\.name)
         tags = RecipeTagNames.normalized(declaredTags + recipes.flatMap(\.tags)).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
@@ -485,7 +509,16 @@ final class RecipeStore: ObservableObject {
         request.predicate = NSPredicate(format: "id == %@ AND library == %@", id as CVarArg, library)
         return try context.fetch(request).first
     }
+    private func ensureExploreCollection(context: NSManagedObjectContext, root: SupperLibraryMO) {
+        let existing = (root.collections?.allObjects as? [RecipeCollectionMO] ?? []).first { $0.id == RecipeCollection.exploreID }
+        let object = existing ?? RecipeCollectionMO(entity: NSEntityDescription.entity(forEntityName: "RecipeCollection", in: context)!, insertInto: context)
+        if object.isInserted { assign(object, root: root, context: context) }
+        object.id = RecipeCollection.exploreID; object.name = "Explore"
+        object.isOnHome = false; object.order = 0; object.removed = false; object.library = root
+    }
+
     private func apply(_ recipe: Recipe, to object: RecipeMO, context: NSManagedObjectContext, root: SupperLibraryMO) {
+        if recipe.isInExplore { ensureExploreCollection(context: context, root: root) }
         object.id = recipe.id; object.title = recipe.title; object.imageData = recipe.imageData
         object.durationMinutes = recipe.durationMinutes.map(NSNumber.init(value:)); object.servings = recipe.servings.map(NSNumber.init(value:))
         object.tagsJSON = Self.encodeStrings(recipe.tags); object.notes = recipe.notes; object.sourceURL = recipe.sourceURL?.absoluteString
@@ -524,7 +557,7 @@ final class RecipeStore: ObservableObject {
                       durationMinutes: object.durationMinutes?.intValue, servings: object.servings?.intValue, tags: decodeStrings(object.tagsJSON),
                       notes: object.notes ?? "", sourceURL: object.sourceURL.flatMap(URL.init(string:)), ingredients: ingredients, steps: steps,
                       reactions: ReactionIdentity.deduplicated(reactions, members: members),
-                      collectionIDs: Set(decodeUUIDs(object.collectionIDsJSON)).intersection(Set(collections.map(\.id))), createdAt: object.createdAt ?? .distantPast)
+                      collectionIDs: Set(decodeUUIDs(object.collectionIDsJSON)).intersection(Set(collections.map(\.id)).union([RecipeCollection.exploreID])), createdAt: object.createdAt ?? .distantPast)
     }
     private static func domainGroceryItem(_ object: GroceryItemMO) -> GroceryItem {
         var ingredient = Ingredient(name: object.name ?? "", quantity: object.quantity ?? "", unit: object.unit ?? "")

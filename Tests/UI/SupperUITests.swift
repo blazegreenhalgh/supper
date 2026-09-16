@@ -392,6 +392,8 @@ import XCTest
         app.buttons["undoDiscoveryDiscard"].tap()
         expectDiscoveryCard(app, title: "Creamy mushroom pasta")
         app.buttons["closeDiscovery"].tap()
+        XCTAssertFalse(app.staticTexts["Lemon chicken bowls edited"].exists)
+        app.tabBars.buttons["Explore"].tap()
         app.swipeUp()
         XCTAssertTrue(app.staticTexts["Lemon chicken bowls edited"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Creamy mushroom pasta"].exists)
@@ -421,9 +423,31 @@ import XCTest
         card.swipeRight()
         expectDiscoveryCard(app, title: "Crispy chickpea wraps")
         app.buttons["closeDiscovery"].tap()
+        XCTAssertFalse(app.staticTexts["Creamy mushroom pasta"].exists)
+        app.tabBars.buttons["Explore"].tap()
         app.swipeUp()
         XCTAssertTrue(app.staticTexts["Creamy mushroom pasta"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Lemon chicken bowls"].exists)
+        capture(app, "Explore saved recipes")
+        app.staticTexts["Creamy mushroom pasta"].tap()
+        app.swipeUp()
+        XCTAssertTrue(app.buttons["moveRecipeLocation"].waitForExistence(timeout: 5))
+        app.buttons["moveRecipeLocation"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertFalse(app.staticTexts["Creamy mushroom pasta"].exists)
+        app.tabBars.buttons["Recipes"].tap()
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["Creamy mushroom pasta"].waitForExistence(timeout: 5))
+        app.staticTexts["Creamy mushroom pasta"].tap()
+        app.buttons["Recipe options"].tap()
+        app.buttons["Move to Explore"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertFalse(app.staticTexts["Creamy mushroom pasta"].exists)
+        app.buttons["Search"].firstMatch.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("Creamy mushroom\n")
+        XCTAssertTrue(app.staticTexts["Creamy mushroom pasta"].waitForExistence(timeout: 5))
     }
 
     private func expectDiscoveryCard(_ app: XCUIApplication, title: String) {
@@ -432,9 +456,10 @@ import XCTest
         XCTAssertEqual(XCTWaiter.wait(for: [match], timeout: 5), .completed)
     }
 
-    private func launch(dark: Bool = false) -> XCUIApplication {
+    private func launch(dark: Bool = false, disableAnimations: Bool = false) -> XCUIApplication {
         let app = XCUIApplication(); app.launchArguments = ["--ui-testing"]
         if dark { app.launchArguments.append("--ui-testing-dark") }
+        if disableAnimations { app.launchArguments.append("--ui-testing-disable-animations") }
         app.launch()
         XCTAssertTrue(app.buttons["recipe-test-chicken"].waitForExistence(timeout: 15))
         return app
@@ -459,13 +484,25 @@ import XCTest
         let options = app.buttons["Library options for Our Supper"]
         XCTAssertTrue(options.waitForExistence(timeout: 5))
         options.tap(); app.buttons["Delete library"].tap()
-        XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout: 5))
-        app.buttons["Cancel"].tap()
+        let confirmationTitle = app.staticTexts["Delete “Our Supper”?"]
+        XCTAssertTrue(confirmationTitle.waitForExistence(timeout: 5))
+        // Native confirmation popovers omit Cancel and dismiss on an outside tap.
+        // Verify that actual dismissal path as well as compact action-sheet Cancel.
+        if app.buttons["Cancel"].exists {
+            app.buttons["Cancel"].tap()
+        } else {
+            let outside = app.otherElements["PopoverDismissRegion"]
+            XCTAssertTrue(outside.waitForExistence(timeout: 5))
+            outside.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.5)).tap()
+        }
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: confirmationTitle)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
         app.buttons["Done"].tap()
         XCTAssertTrue(app.buttons["recipe-test-chicken"].waitForExistence(timeout: 5))
         app.buttons["Library options"].tap(); app.buttons["Household"].tap()
         app.swipeUp()
         options.tap(); app.buttons["Delete library"].tap()
+        XCTAssertTrue(confirmationTitle.waitForExistence(timeout: 5))
         app.buttons["Delete library"].tap()
         expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: app.buttons["Done"])
         waitForExpectations(timeout: 5)
@@ -529,7 +566,9 @@ import XCTest
     }
 
     func testIngredientAndSectionDragsPersistOnSave() {
-        let app = launch(); openRecipe(app)
+        // Match the recipe-card drag test: simulator lift animations can hold the
+        // preview at its origin while XCTest has already sent the drag movement.
+        let app = launch(disableAnimations: true); openRecipe(app)
         app.buttons["editRecipe"].tap(); app.buttons["editIngredients"].tap()
         XCTAssertTrue(app.buttons["addRecipeSection"].waitForExistence(timeout: 5), app.debugDescription)
         app.buttons["addRecipeSection"].tap()
@@ -543,10 +582,12 @@ import XCTest
         XCTAssertTrue(chicken.isHittable)
         let garnish = app.staticTexts["recipeSection-Garnish"].firstMatch
         XCTAssertTrue(garnish.isHittable)
+        let ingredientDropArea = app.staticTexts["Drop ingredients here or tap +"].firstMatch
+        XCTAssertTrue(ingredientDropArea.isHittable)
         chicken.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 1.1,
-            thenDragTo: garnish.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)),
+            thenDragTo: ingredientDropArea.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)),
             withVelocity: .slow, thenHoldForDuration: 1)
-        capture(app, "Ingredient dropped on section heading")
+        capture(app, "Ingredient dropped into empty section")
         let movedIngredient = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             chicken.frame.minY > garnish.frame.maxY
         }, object: chicken)
@@ -726,7 +767,8 @@ import XCTest
         let tagInput = tagField.exists ? tagField : app.textViews["recipeTagsText"]
         XCTAssertTrue(tagInput.waitForExistence(timeout: 5))
         tagInput.tap(); tagInput.typeText("Weeknight")
-        XCTAssertEqual(tagInput.value as? String, "Weeknight")
+        let completedTyping = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Weeknight"), object: tagInput)
+        XCTAssertEqual(XCTWaiter.wait(for: [completedTyping], timeout: 5), .completed)
         app.buttons["addSingleRecipeTag"].tap()
         XCTAssertTrue(app.staticTexts["Weeknight"].waitForExistence(timeout: 5), app.debugDescription)
         capture(app, "Tags ready to save")

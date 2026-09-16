@@ -376,7 +376,8 @@ struct DraftCollectionsEditor: View {
     @Binding var selected: Set<UUID>
     var body: some View {
         List {
-            if store.collections.isEmpty { Text("Open Collections on the Recipes screen to create a collection.").foregroundStyle(.secondary) }
+            Text("Explore keeps this recipe saved for later, separate from My Recipes. Other collections can be used in either place.")
+                .font(.subheadline).foregroundStyle(.secondary)
             ForEach(store.collections) { collection in
                 Toggle(collection.name, isOn: Binding(get: { selected.contains(collection.id) }, set: { on in
                     if on { selected.insert(collection.id) } else { selected.remove(collection.id) }

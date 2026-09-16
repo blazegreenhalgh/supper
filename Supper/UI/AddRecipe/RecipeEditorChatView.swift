@@ -203,7 +203,7 @@ struct RecipeChatMessage: Identifiable {
     func loadUITestProposal(draft: RecipeDraft, collections: [RecipeCollection], householdID: UUID?) {
         let arguments = ProcessInfo.processInfo.arguments
         if arguments.contains("--ui-testing"), arguments.contains("--collection-chat-ui-testing"), messages.isEmpty,
-           let collection = collections.first(where: { !draft.collectionIDs.contains($0.id) }) {
+           let collection = collections.first(where: { $0.id != RecipeCollection.exploreID && !draft.collectionIDs.contains($0.id) }) {
             pendingCollections = RecipeCollectionProposal(base: draft.collectionIDs, edit: RecipeCollectionEdit(add: [collection.id], remove: []), householdID: householdID)
             messages.append(RecipeChatMessage(text: "Review the collection changes below, then apply them to your draft."))
             return

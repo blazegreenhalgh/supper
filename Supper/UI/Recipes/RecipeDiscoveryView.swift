@@ -61,7 +61,7 @@ final class RecipeDiscoveryModel: ObservableObject {
         do {
             guard householdID == store.activeHouseholdID else { throw SupperError.invalid("The active household changed. Switch back before keeping these recipes.") }
             if !store.recipes.contains(where: { RecipeDiscoveryReview.key($0) == RecipeDiscoveryReview.key(suggestion.recipe) }) {
-                try store.addRecipe(suggestion.recipe)
+                try store.saveToExplore(suggestion.recipe)
             }
             review.didKeep(suggestion.id)
             return true
@@ -144,7 +144,7 @@ struct RecipeDiscoveryView: View {
             }
             .confirmationDialog("Start a new request?", isPresented: $showingStartOver, titleVisibility: .visible) {
                 Button("Discard remaining ideas", role: .destructive) { model.startOver() }
-            } message: { Text("Recipes you kept are already saved. The remaining ideas will be discarded.") }
+            } message: { Text("Recipes you kept are saved in Explore. The remaining ideas will be discarded.") }
             .supperError($model.error, title: "Couldn’t finish that")
             .alert("From the web", isPresented: $showingSourceInfo) {
                 Button("OK", role: .cancel) { }
@@ -187,7 +187,7 @@ struct RecipeDiscoveryView: View {
                     NavigationLink("Set up OpenAI", destination: AISettingsView())
                     Text("Connect your account to find recipes.").font(.footnote).foregroundStyle(.secondary)
                 }
-                Text("Find published recipes, then keep the ones you love.")
+                Text("Find published recipes, then save the ones you want to try to Explore.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             .padding(.horizontal, 24).padding(.bottom, 24)
@@ -292,6 +292,8 @@ struct RecipeDiscoveryView: View {
     private var finished: some View {
         ContentUnavailableView {
             Label(model.review.keptIDs.isEmpty ? "Not quite your flavour?" : "Good taste.", systemImage: model.review.keptIDs.isEmpty ? "fork.knife" : "checkmark.seal")
+        } description: {
+            Text(model.review.keptIDs.isEmpty ? "Try another craving to find something you'll love." : "Your recipes are saved in Explore, ready to try. Move your favourites to My Recipes whenever you like.")
         } actions: {
             Button("Find more recipes", systemImage: "magnifyingglass") { model.startOver() }.supperGlassButton(prominent: true)
             if !model.review.discardedIDs.isEmpty { Button("Undo last discard", systemImage: "arrow.uturn.backward") { model.undoDiscard() } }

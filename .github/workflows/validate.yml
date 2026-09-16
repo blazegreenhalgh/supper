@@ -6,9 +6,13 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   regression:
     runs-on: macos-15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -20,62 +24,67 @@ jobs:
       - name: Domain and persistence regression tests
         if: matrix.suite == 'library'
         run: swift test
-      - name: Build iOS simulator app
-        # Keychain tests need a signed simulator app with an application identity.
-        # Ad-hoc signing needs no Apple credentials; shipping entitlements are unchanged.
-        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements build
-      - name: Photo comparison UI regression test
-        if: matrix.suite == 'editor'
-        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath PhotoResults -only-testing:SupperUITests/SupperUITests/testRecipePhotosPreviewOriginalAndApplyWithUndoAndUploadOption CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
-      - name: Changed screens UI regression tests
-        if: matrix.suite == 'editor'
-        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath SectionResults -only-testing:SupperUITests/SupperUITests/testIngredientAndSectionDragsPersistOnSave -only-testing:SupperUITests/SupperUITests/testRecipeCardPreviewActionsAndCollectionSubmenu -only-testing:SupperUITests/SupperUITests/testMainTagsCreateRenameDeleteAndIndividualEntry -only-testing:SupperUITests/SupperUITests/testGroceriesCanClearCheckedAndUncheckedItems -only-testing:SupperUITests/SupperUITests/testFormattingReviewCancelAndDraftOnlyApply -only-testing:SupperUITests/SupperUITests/testTagsSheetAndSimpleGrocerySelection -only-testing:SupperUITests/SupperUITests/testHomepageActionsAndActiveFilters CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
-      - name: API key Keychain UI regression test
-        if: matrix.suite == 'library'
-        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath AIResults -only-testing:SupperUITests/SupperUITests/testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
-      - name: Native navigation and editor UI regression tests
-        # Partition the existing suite so keyboard/drag failures and their screenshots
-        # are available without waiting for the unrelated library/Keychain checks.
+      - name: Build app and UI tests once
+        # Keychain tests need an ad-hoc signed app with an application identity;
+        # shipping entitlements are unchanged. Build against the SDK before asking
+        # for a device, as a fresh runner may not have registered its simulators yet.
+        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements build-for-testing
+      - name: Run UI regression tests in one session
+        env:
+          SUPPER_TEST_SUITE: ${{ matrix.suite }}
         run: |
+          # These two complementary selections cover every UI test exactly once.
+          # Keep one test session per worker: repeated sessions previously added
+          # several minutes each. The split balances recorded execution times.
           editor_tests=(
             testChatCollectionChangesApplyToDraftAndOnlyPersistOnSave
             testRecipeChatKeepsInputWhenReopenedAndCancelDoesNotSave
             testRecipeChatPreviewShowsRemovalsAndAppliesAndUndoesInPlace
             testRecipeChatRetainsSessionAcrossEditorsAndProtectsManualChanges
             testRecipeDragMovesBetweenHomeCollections
+            testRecipePhotosPreviewOriginalAndApplyWithUndoAndUploadOption
+            testFormattingReviewCancelAndDraftOnlyApply
+            testIngredientAndSectionDragsPersistOnSave
+            testTagsSheetAndSimpleGrocerySelection
+            testMainTagsCreateRenameDeleteAndIndividualEntry
           )
-          selection=(-skip-testing:SupperUITests/SupperUITests/testOpenAIKeyCanBeSavedReplacedAndRemovedWithoutSendingRequests -skip-testing:SupperUITests/SupperUITests/testMainTagsCreateRenameDeleteAndIndividualEntry -skip-testing:SupperUITests/SupperUITests/testGroceriesCanClearCheckedAndUncheckedItems -skip-testing:SupperUITests/SupperUITests/testFormattingReviewCancelAndDraftOnlyApply -skip-testing:SupperUITests/SupperUITests/testTagsSheetAndSimpleGrocerySelection -skip-testing:SupperUITests/SupperUITests/testHomepageActionsAndActiveFilters -skip-testing:SupperUITests/SupperUITests/testIngredientAndSectionDragsPersistOnSave -skip-testing:SupperUITests/SupperUITests/testRecipeCardPreviewActionsAndCollectionSubmenu)
-          selection+=(-skip-testing:SupperUITests/SupperUITests/testRecipePhotosPreviewOriginalAndApplyWithUndoAndUploadOption)
+          selection=()
           for test_name in "${editor_tests[@]}"; do
-            if [ '${{ matrix.suite }}' = editor ]; then
+            if [ "$SUPPER_TEST_SUITE" = editor ]; then
               selection+=("-only-testing:SupperUITests/SupperUITests/$test_name")
             else
               selection+=("-skip-testing:SupperUITests/SupperUITests/$test_name")
             fi
           done
-          xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath UIResults "${selection[@]}" CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements test
-      - name: Export navigation screenshots
+          set +e
+          xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath UIResults "${selection[@]}" test-without-building 2>&1 | tee UITestRun.log
+          test_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$test_status" -eq 0 ]; then exit 0; fi
+          if [ "$test_status" -ne 65 ]; then exit "$test_status"; fi
+          # Retry only known simulator lifecycle failures after a complete run.
+          # Assertions, unknown errors and incomplete runs remain failures.
+          retry_ids=$(python3 .github/scripts/simulator_retries.py UITestRun.log "${selection[@]}") || exit "$test_status"
+          retry_selection=()
+          while IFS= read -r test_id; do
+            retry_selection+=("-only-testing:$test_id")
+          done <<< "$retry_ids"
+          echo "::warning::Retrying simulator lifecycle failures once; see UITestRun.log for the original results."
+          xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath UIRetryResults "${retry_selection[@]}" test-without-building
+      - name: Export UI screenshots
         if: always()
         run: |
-          for result in PhotoResults UIResults SectionResults; do
+          for result in UIResults UIRetryResults; do
             if [ -d "$result.xcresult" ]; then
               xcrun xcresulttool export attachments --path "$result.xcresult" --output-path "UITestAttachments/$result"
             fi
           done
-          python3 - <<'PY'
-          import base64, pathlib, subprocess
-          for index, path in enumerate(sorted(pathlib.Path('UITestAttachments').rglob('*.png'))[:36]):
-              target = pathlib.Path('/tmp') / f'supper-ui-{index}.jpg'
-              subprocess.run(['sips', '-Z', '700', '-s', 'format', 'jpeg', '-s', 'formatOptions', '50', str(path), '--out', str(target)], check=True, stdout=subprocess.DEVNULL)
-              print('SUPPER_SCREENSHOT ' + str(index) + ' ' + base64.b64encode(target.read_bytes()).decode())
-          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ui-test-results-${{ matrix.suite }}
+          name: ui-test-results-${{ matrix.suite }}-${{ github.run_attempt }}
           path: |
-            PhotoResults.xcresult
-            SectionResults.xcresult
             UITestAttachments
-            AIResults.xcresult
             UIResults.xcresult
+            UIRetryResults.xcresult
+            UITestRun.log
