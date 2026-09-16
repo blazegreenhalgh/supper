@@ -1,34 +1,20 @@
-Explore: a new tab beside Search for recipes saved to try later. Keep a recipe from What are you craving? and confirm it appears in Explore, separate from Recipes. Move it to My Recipes, then back to Explore from the recipe menu. Check that edits, photos, reactions and other collections are preserved, and Search finds recipes in both places. Add a photo/title or import a URL from Explore and confirm it stays there. Check the same separation on both household devices after sync; existing recipes should stay in Recipes.
+Explore keeps recipes saved for later separate from your everyday cookbook.
 
-Recipe chat follow-ups: try the cream/stock/flour sauce with soy sauce and rosemary. Ask for ingredients and method without specifying servings. Confirm no serving-count or yield-confirmation question appears: the proposal should use the published recipe's servings and quantities, including when the draft already has a different serving count. Component-only requests should leave whole-dish servings unchanged. Follow-ups and retries now reuse downloaded sources, and equivalent amounts such as 100 and 100.0 no longer fail validation. Errors identify the failed stage and reason; long-press to copy the details. Check Preview, Apply, Undo and Save, and confirm manual edits remain protected.
+- Keep a recipe from What are you craving? and confirm it appears in Explore, beside Search, without appearing in Recipes.
+- Move it to My Recipes, then back to Explore from the recipe menu. Edits, photos, reactions and other collection memberships should stay intact.
+- Search should find recipes in both places. Adding a photo and title or importing a URL from Explore should save it there.
+- Check the same separation on both household devices after sync. Existing recipes should stay in Recipes. Explore does not track cooking history.
 
-Recipe chat: adapt your own dish from a published base recipe. Try the cream/stock/flour sauce with soy sauce and rosemary. Review the source servings, foundation, estimated seasonings and method adaptations before applying. Changes that cannot be supported should ask a question or decline. Confirm source links, assumptions and adaptation notes remain after saving, and Undo restores the previous draft.
+Recipe discovery and chat:
+- Discovery finds published recipes online using your configured OpenAI API key. Preview and edit a suggestion, swipe to keep or discard, undo a discard, and switch between stack and grid. Only kept recipes should save.
+- Ask chat to adapt a dish from a published base. Review source links, servings, estimated seasonings and method changes before applying. Unsupported requests should ask a question or decline.
+- Without a requested serving count, proposals should use the published recipe's servings and quantities. Check follow-ups, Preview, Apply, Undo and Save. Manual edits should remain protected.
+- Preview photo changes against the original, apply them and undo. Check that cancelling leaves the saved recipe unchanged.
 
-New: describe what you’re craving to find recipes online or create them with Apple Intelligence. Tap the stack to preview/edit, swipe right to keep or left to discard, undo a discard, and switch to grid view. Only kept recipes are saved to your household.
+Regression checks:
+- Search and filters after normal back, swipe-back and cancelled swipe-back.
+- Adding, editing and reordering ingredients and sections; formatting review; tags and collections; full-screen method navigation; large text and Reduce Motion.
+- Grocery scaling, merging, selection and clearing checked or unchecked items. Verify recipe and grocery sync between household devices.
+- Household invitations, library switching and removal with two Apple accounts. Cancel must preserve everything; leaving another person's library must preserve their data. Check iCloud should show a result and retain useful error details.
 
-Library management and iCloud feedback:
-- Household → Libraries: swipe left or use the library menu. Check Cancel keeps everything. Delete removes an owned library; Leave removes your access to someone else's library without deleting their recipes.
-- Remove a duplicate library and confirm the other library's recipes and groceries remain. Removing the last library should open a new empty cookbook.
-- Check iCloud should show progress and a visible result. A successful account check must not hide an invitation/setup failure. Copy iCloud diagnostics if needed.
-- Invitations require the Supper CloudKit development schema, including cloudkit.share, to be deployed to production. This build cannot deploy it itself. Verify invitations and owner/participant removal with two Apple accounts after deployment.
-
-Supper: smoother filters and clearer recipe editing
-
-• Edge-to-edge filter scrolling, equal-height clear and filter buttons, and smooth filter/results changes that respect Reduce Motion.
-• Search now has its own bottom tab. Search words, ingredients, tags and collections; interpret natural-language requests from that screen.
-• Active filter chips turn blue. Clear filters stays at the start of the row, outside the scrolling chips.
-• Pick something is in the homepage options menu. Edit beside Add Recipe opens Collections to create, rename, reorder and hide homepage sections.
-• A cleaner recipe form puts photo and title first. Ingredients and method have dedicated editors with explicit Add actions, labeled fields and reordering.
-• Ingredient amounts stay at the right edge. Grocery selection uses clear leading checkmarks and Select all/Deselect all.
-• Smaller method text, plus a full-screen step reader with Previous and Next. The original recipe link is centered plain text below Add to Groceries.
-
-Please check search and filters after normal back, swipe-back and cancelled swipe-back; adding/editing/reordering ingredients and steps; cancel/save behavior; long ingredient names and large text; and full-screen step navigation.
-
-• Change cooking servings without changing the original recipe. Add to Groceries previews the scaled amounts.
-• Review and recover ingredient groups from the original source. Switch between source groups and shopping categories.
-• Groceries combine compatible weights, volumes and counts, retain contributing recipes, and keep checked/removed items removed during retries.
-• Pick something respects search, tags, duration, collections and reactions. Create collections and arrange their homepage sections.
-• On-device recipe text/screenshot assistance, tag suggestions and natural-language search; manual entry and text recognition remain available without Apple Intelligence.
-• Household settings: set your name, invite/manage sharing, accept an invitation, and switch libraries without deleting your existing library.
-
-Please check normal back, swipe-back and cancelled swipe-back with an active search; Dynamic Type and Reduce Transparency; editing and grocery sync between both phones. CloudKit production schema must include the new fields, collection/member types and sharing record type before this build is distributed to existing households.
+CloudKit invitations and sharing require the production schema, including cloudkit.share. Verify these with signed builds and two Apple accounts.

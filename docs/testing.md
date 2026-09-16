@@ -6,7 +6,8 @@ before starting the UI workers.
 
 The UI suite uses fixture recipes and offline service responses. CI builds the
 app and test bundle once per worker, then uses `test-without-building` for one
-simulator session. Four suites run on separate workers: discovery, chat, editor
+simulator session. After the generic build registers the runtimes, CI waits for
+the simulator to finish booting before starting XCTest. Four suites run on separate workers: discovery, chat, editor
 and library. `.github/scripts/ui_test_shards.py` defines both the worker matrix
 and test selections, and rejects missing, duplicate or stale assignments.
 
@@ -47,3 +48,7 @@ CI retries only classified simulator launch/termination failures once, after
 verifying the original run completed every selected test. Assertions, unknown
 errors and incomplete runs fail. Both result bundles and the original log are
 retained as artifacts. Superseded runs on the same branch are cancelled.
+
+Xcode Cloud checks the 4,000-character limit for each TestFlight notes file before
+running tests and archiving, so oversized notes fail early instead of being
+truncated during upload.

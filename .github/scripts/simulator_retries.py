@@ -11,6 +11,11 @@ LIFECYCLE_ERRORS = (
     "Failed to terminate com.blazegreenhalgh.Supper",
     "Failed to get background assertion for target app",
 )
+LAUNCH_PROGRESS_TIMEOUT = re.compile(
+    r"Failed to get launch progress for <XCUIApplicationImpl: .* "
+    r"com\.blazegreenhalgh\.Supper at .*?>: "
+    r"Timed out while requesting launch progress\."
+)
 
 
 def retry_tests(log: str, expected: set[str]) -> list[str]:
@@ -33,7 +38,8 @@ def retry_tests(log: str, expected: set[str]) -> list[str]:
     if not failed or set(issues) != failed:
         raise ValueError("Every failed test must have a classified simulator lifecycle error.")
     for name in failed:
-        if any(not message.startswith(LIFECYCLE_ERRORS) for message in issues[name]):
+        if any(not (message.startswith(LIFECYCLE_ERRORS) or LAUNCH_PROGRESS_TIMEOUT.fullmatch(message))
+               for message in issues[name]):
             raise ValueError(f"{name} has an assertion or other failure requiring review.")
     return sorted(f"SupperUITests/SupperUITests/{name}" for name in failed)
 
