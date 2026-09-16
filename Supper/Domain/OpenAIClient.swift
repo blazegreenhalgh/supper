@@ -10,11 +10,23 @@ public struct OpenAIClient: Sendable {
     public static let imageEditModel = "gpt-image-2.5-sunburst"
     private let key: String
     private let session: URLSession
-    private static let sharedSession = URLSession(configuration: .ephemeral, delegate: NoAPIRedirects(), delegateQueue: nil)
+    private let imageRequestTimeout: Duration
+    private static let sharedSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForResource = 240
+        return URLSession(configuration: configuration, delegate: NoAPIRedirects(), delegateQueue: nil)
+    }()
 
     public init(apiKey: String, session: URLSession? = nil) throws {
+        try self.init(apiKey: apiKey, session: session ?? Self.sharedSession, imageRequestTimeout: .seconds(240))
+    }
+
+    // An injectable deadline lets regression tests exercise an unresponsive server
+    // without waiting four minutes or making a paid image request.
+    init(apiKey: String, session: URLSession, imageRequestTimeout: Duration) throws {
         key = try Self.validatedKey(apiKey)
-        self.session = session ?? Self.sharedSession
+        self.session = session
+        self.imageRequestTimeout = imageRequestTimeout
     }
 
     public static func validatedKey(_ value: String) throws -> String {
@@ -62,7 +74,8 @@ public struct OpenAIClient: Sendable {
 
     public func generateCover(prompt: String) async throws -> Data {
         let data = try await request(path: "images/generations", body: [
-            "model": Self.imageModel, "prompt": prompt, "size": "1024x1024", "quality": "medium", "n": 1
+            "model": Self.imageModel, "prompt": prompt, "size": "1024x1024", "quality": "medium", "n": 1,
+            "output_format": "jpeg", "output_compression": 90
         ])
         return try Self.imageResult(data)
     }
@@ -75,7 +88,8 @@ public struct OpenAIClient: Sendable {
         let data = try await request(path: "images/edits", body: [
             "model": Self.imageEditModel, "prompt": prompt,
             "images": [["image_url": "data:image/jpeg;base64,\(jpeg.base64EncodedString())"]],
-            "input_fidelity": "high", "size": "1024x1024", "quality": "medium", "n": 1
+            "input_fidelity": "high", "size": "1024x1024", "quality": "medium", "n": 1,
+            "output_format": "jpeg", "output_compression": 90
         ])
         return try Self.imageResult(data)
     }
@@ -110,15 +124,16 @@ public struct OpenAIClient: Sendable {
 
     private func request(path: String, body: [String: Any]?) async throws -> Data {
         try Task.checkCancellation()
+        let isImageRequest = path.hasPrefix("images/")
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/\(path)")!)
         request.httpMethod = body == nil ? "GET" : "POST"
-        request.timeoutInterval = path.hasPrefix("images/") ? 180 : 90
+        request.timeoutInterval = isImageRequest ? 240 : 90
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
         do {
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await response(for: request, timeout: isImageRequest ? imageRequestTimeout : .seconds(90))
             try Task.checkCancellation()
             guard let http = response as? HTTPURLResponse else { throw OpenAIResponse.invalid }
             guard (200..<300).contains(http.statusCode) else { throw Self.apiError(status: http.statusCode, data: data) }
@@ -128,7 +143,28 @@ public struct OpenAIClient: Sendable {
         catch let error as URLError {
             try Task.checkCancellation()
             if error.code == .cancelled { throw CancellationError() }
-            throw SupperError.invalid(error.code == .timedOut ? "OpenAI took too long to respond. Your recipe is unchanged; try again." : "Couldn’t connect to OpenAI. Check your internet connection and try again. Your recipe is unchanged.")
+            if error.code == .timedOut {
+                throw SupperError.invalid(isImageRequest
+                    ? "OpenAI didn’t finish this photo in time. Your original photo is unchanged. Please try again."
+                    : "OpenAI took too long to respond. Your recipe is unchanged; try again.")
+            }
+            throw SupperError.invalid("Couldn’t connect to OpenAI. Check your internet connection and try again. Your recipe is unchanged.")
+        }
+    }
+
+    private func response(for request: URLRequest, timeout: Duration) async throws -> (Data, URLResponse) {
+        // URLRequest.timeoutInterval is an inactivity timeout, not a deadline for
+        // the upload + server processing + download. A stalled/trickling response
+        // must still finish with an error and release the UI's busy state.
+        try await withThrowingTaskGroup(of: (Data, URLResponse).self) { group in
+            defer { group.cancelAll() }
+            group.addTask { try await session.data(for: request) }
+            group.addTask {
+                try await Task.sleep(for: timeout)
+                throw URLError(.timedOut)
+            }
+            guard let result = try await group.next() else { throw CancellationError() }
+            return result
         }
     }
 

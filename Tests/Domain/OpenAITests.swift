@@ -102,6 +102,8 @@ import FoundationNetworking
             let body = try Self.body(request)
             #expect(body["model"] as? String == "gpt-image-2.5-flare")
             #expect(body["n"] as? Int == 1)
+            #expect(body["output_format"] as? String == "jpeg")
+            #expect(body["output_compression"] as? Int == 90)
             #expect(request.url?.path == "/v1/images/generations")
             return (200, Data(#"{"data":[{"b64_json":""}]}"#.utf8))
         }
@@ -117,10 +119,77 @@ import FoundationNetworking
             #expect(body["model"] as? String == "gpt-image-2.5-sunburst")
             #expect(body["input_fidelity"] as? String == "high")
             #expect(body["n"] as? Int == 1)
+            #expect(body["output_format"] as? String == "jpeg")
+            #expect(body["output_compression"] as? Int == 90)
             #expect((body["images"] as? [[String: String]]) == [["image_url": "data:image/jpeg;base64,\(original.base64EncodedString())"]])
             return (200, try JSONSerialization.data(withJSONObject: ["data": [["b64_json": edited.base64EncodedString()]]]))
         }
         #expect(try await client.enhanceFoodPhoto(jpeg: original, prompt: "Preserve the food; improve lighting.") == edited)
+    }
+
+    @Test(.timeLimit(.minutes(1))) func stalledPhotoResponseTimesOutAndCancelsTransport() async throws {
+        let (stopped, stopSignal) = AsyncStream<Void>.makeStream()
+        StalledOpenAIProtocol.onStart = nil
+        StalledOpenAIProtocol.onStop = { stopSignal.yield(); stopSignal.finish() }
+        let session = stalledPhotoSession()
+        defer { session.invalidateAndCancel() }
+        let client = try OpenAIClient(apiKey: fakeKey, session: session, imageRequestTimeout: .milliseconds(250))
+        let start = ContinuousClock.now
+        do {
+            _ = try await client.enhanceFoodPhoto(jpeg: Data([1]), prompt: "Polish")
+            Issue.record("A stalled response must not become a photo")
+        } catch {
+            #expect(!(error is CancellationError))
+            #expect(error.localizedDescription.contains("didn’t finish this photo in time"))
+            #expect(error.localizedDescription.contains("original photo is unchanged"))
+        }
+        #expect(start.duration(to: .now) < .seconds(5))
+        // The deadline must cancel the paid request locally, not just hide its spinner.
+        for await _ in stopped { break }
+    }
+
+    @Test(.timeLimit(.minutes(1))) func stopCancelsPhotoTransportWithoutWaitingForDeadline() async throws {
+        let (started, startSignal) = AsyncStream<Void>.makeStream()
+        let (stopped, stopSignal) = AsyncStream<Void>.makeStream()
+        StalledOpenAIProtocol.onStart = { startSignal.yield(); startSignal.finish() }
+        StalledOpenAIProtocol.onStop = { stopSignal.yield(); stopSignal.finish() }
+        let session = stalledPhotoSession()
+        defer { session.invalidateAndCancel() }
+        let client = try OpenAIClient(apiKey: fakeKey, session: session, imageRequestTimeout: .seconds(30))
+        let task = Task { try await client.enhanceFoodPhoto(jpeg: Data([1]), prompt: "Polish") }
+        for await _ in started { break }
+        let start = ContinuousClock.now
+        task.cancel()
+        do {
+            _ = try await task.value
+            Issue.record("A cancelled request must not return a photo")
+        } catch { #expect(error is CancellationError) }
+        #expect(start.duration(to: .now) < .seconds(5))
+        for await _ in stopped { break }
+    }
+
+    @Test func photoErrorsReturnActionableMessagesAndAllowAnotherRequest() async throws {
+        var calls = 0
+        let edited = Data([4, 5, 6])
+        let client = try makeClient { _ in
+            calls += 1
+            if calls == 1 {
+                return (403, Data("{\"error\":{\"message\":\"\(fakeKey) private photo\"}}".utf8))
+            }
+            return (200, try JSONSerialization.data(withJSONObject: ["data": [["b64_json": edited.base64EncodedString()]]]))
+        }
+        do {
+            _ = try await client.enhanceFoodPhoto(jpeg: Data([1]), prompt: "Polish")
+            Issue.record("A rejected request must fail")
+        } catch {
+            #expect(error.localizedDescription.contains("permission"))
+            #expect(!error.localizedDescription.contains(fakeKey))
+            #expect(!error.localizedDescription.contains("private photo"))
+        }
+        // No automatic paid retries; a new explicit attempt remains usable.
+        #expect(calls == 1)
+        #expect(try await client.enhanceFoodPhoto(jpeg: Data([1]), prompt: "Polish") == edited)
+        #expect(calls == 2)
     }
 
     @Test func invalidPhotoInputNeverSendsAnEditRequest() async throws {
@@ -177,6 +246,11 @@ import FoundationNetworking
         config.protocolClasses = [MockOpenAIProtocol.self]
         return try OpenAIClient(apiKey: fakeKey, session: URLSession(configuration: config))
     }
+    private func stalledPhotoSession() -> URLSession {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [StalledOpenAIProtocol.self]
+        return URLSession(configuration: config)
+    }
     private static func body(_ request: URLRequest) throws -> [String: Any] {
         var data = request.httpBody ?? Data()
         if data.isEmpty, let stream = request.httpBodyStream {
@@ -186,6 +260,22 @@ import FoundationNetworking
         }
         return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
+}
+
+/// Starts a successful image response, then never finishes its body. This exercises
+/// the actual URLSession cancellation/deadline path rather than throwing a fake timeout.
+private final class StalledOpenAIProtocol: URLProtocol, @unchecked Sendable {
+    static var onStart: (() -> Void)?
+    static var onStop: (() -> Void)?
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 200,
+            httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data("{\"data\":[".utf8))
+        Self.onStart?()
+    }
+    override func stopLoading() { Self.onStop?() }
 }
 
 private final class MockOpenAIProtocol: URLProtocol, @unchecked Sendable {

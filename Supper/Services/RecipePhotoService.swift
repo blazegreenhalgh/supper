@@ -21,11 +21,14 @@ struct RecipePhotoService {
             \(context)
             """)
             try Task.checkCancellation()
+            await progress("Preparing your photo preview…")
             return [RecipePhotoProposal(image: try RecipePhotoImage.jpeg(image), previousImage: draft.imageData, kind: .generated)]
         case .enhanced:
             guard let original = originalPhoto ?? draft.imageData else { throw SupperError.invalid("Upload a food photo under Generate cover → Polish my photo, then try again.") }
-            await progress("Polishing your food photo…")
+            await progress("Preparing your food photo…")
             let jpeg = try RecipePhotoImage.jpeg(original)
+            try Task.checkCancellation()
+            await progress("Polishing your food photo…")
             let image = try await client.enhanceFoodPhoto(jpeg: jpeg, prompt: """
             Retouch this actual food photograph for a tasteful editorial cookbook. Preserve the identity of the real dish.
             Keep the exact food, ingredients, garnish, portions, shapes, arrangement and plate from the input photograph.
@@ -36,6 +39,7 @@ struct RecipePhotoService {
             Apply these style preferences only where consistent with preserving the photographed food: \(request)
             """)
             try Task.checkCancellation()
+            await progress("Preparing your photo preview…")
             return [RecipePhotoProposal(image: try RecipePhotoImage.jpeg(image), previousImage: draft.imageData,
                                         originalPhoto: jpeg, kind: .enhanced)]
         }

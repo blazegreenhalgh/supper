@@ -15,6 +15,7 @@ struct RecipeCoverView: View {
     @State private var photos: [RecipePhotoProposal] = []
     @State private var reviewing: RecipePhotoProposal?
     @State private var busy = false
+    @State private var startedAt = Date()
     @State private var progress = ""
     @State private var error: String?
     @State private var task: Task<Void, Never>?
@@ -39,7 +40,20 @@ struct RecipeCoverView: View {
                 }
                 Section {
                     if busy {
-                        ProgressView(progress)
+                        HStack(spacing: 12) {
+                            ProgressView()
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(progress)
+                                if mode != .online {
+                                    Text("This can take a few minutes.")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                HStack(spacing: 4) {
+                                    Text("Elapsed")
+                                    Text(startedAt, style: .timer).monospacedDigit()
+                                }.font(.caption).foregroundStyle(.secondary)
+                            }
+                        }.accessibilityIdentifier("recipePhotoProgress")
                         Button("Stop", role: .cancel, action: stop)
                     } else if settings.isConfigured {
                         Button(actionTitle, systemImage: mode == .online ? "photo.on.rectangle.angled" : "sparkles", action: prepare)
@@ -103,8 +117,9 @@ struct RecipeCoverView: View {
         }
     }
     private func prepare() {
+        guard !busy else { return }
         let snapshot = draft; let selectedMode = mode; let original = uploadedPhoto; let preferences = request
-        busy = true; error = nil
+        busy = true; error = nil; photos = []; startedAt = Date(); progress = "Preparing your request…"
         let id = UUID(); requestID = id
         task = Task {
             defer { if requestID == id { busy = false; task = nil } }
@@ -115,6 +130,7 @@ struct RecipeCoverView: View {
                 try Task.checkCancellation()
                 guard requestID == id else { return }
                 photos = result
+                if selectedMode != .online { reviewing = result.first }
             } catch { if requestID == id, !Task.isCancelled { self.error = error.localizedDescription } }
         }
     }
