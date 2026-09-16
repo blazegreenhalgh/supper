@@ -26,8 +26,9 @@ jobs:
         run: swift test
       - name: Build app and UI tests once
         # Keychain tests need an ad-hoc signed app with an application identity;
-        # shipping entitlements are unchanged. Let Xcode manage simulator startup.
-        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements build-for-testing
+        # shipping entitlements are unchanged. Build against the SDK before asking
+        # for a device, as a fresh runner may not have registered its simulators yet.
+        run: xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'generic/platform=iOS Simulator' -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGN_ENTITLEMENTS=Tests/UI/Simulator.entitlements build-for-testing
       - name: Run UI regression tests in one session
         env:
           SUPPER_TEST_SUITE: ${{ matrix.suite }}
