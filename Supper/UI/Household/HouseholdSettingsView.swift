@@ -9,8 +9,11 @@ struct HouseholdSettingsView: View {
     @State private var error: String?
     @State private var presentation: SharePresentation?
     @State private var task: Task<Void, Never>?
-    @State private var libraryAction: LibraryAction?
+    @State private var libraryToRemove: HouseholdSummary?
+    @State private var showingRemovalConfirmation = false
     @State private var copiedDiagnostics = false
+    @State private var libraryToHide: HouseholdSummary?
+    @State private var showingHideConfirmation = false
     private var isBusy: Bool {
         store.shareProgress != nil || store.checkingCloudAccount || store.removingHouseholdID != nil || store.joiningHousehold
     }
@@ -82,7 +85,8 @@ struct HouseholdSettingsView: View {
                                     }
                                     if household.incoming {
                                         Button("Hide on this iPhone", systemImage: "eye.slash") {
-                                            libraryAction = .hide(household)
+                                            libraryToHide = household
+                                            showingHideConfirmation = true
                                         }
                                     }
                                 } label: {
@@ -111,28 +115,21 @@ struct HouseholdSettingsView: View {
             }.navigationTitle("Household").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { task?.cancel(); dismiss() }.disabled(store.removingHouseholdID != nil) } }
                 .interactiveDismissDisabled(store.removingHouseholdID != nil)
-                // One presentation host prevents competing dialogs on this Form
-                // from swallowing the delete/leave confirmation after a menu tap.
-                .confirmationDialog(libraryAction?.title ?? "Library", isPresented: Binding(
-                    get: { libraryAction != nil },
-                    set: { if !$0 { libraryAction = nil } }
-                ), titleVisibility: .visible, presenting: libraryAction) { action in
-                    switch action {
-                    case .remove(let household):
-                        Button(household.incoming ? "Leave library" : "Delete library", role: .destructive) { remove(household) }
-                    case .hide(let household):
-                        Button("Hide library") {
-                            do { try store.hideIncomingLibrary(household.id); name = store.currentMemberName }
-                            catch { self.error = CloudProblem.message(error) }
-                            libraryAction = nil
-                        }
+                .confirmationDialog(removalTitle, isPresented: $showingRemovalConfirmation, titleVisibility: .visible, presenting: libraryToRemove) { household in
+                    Button(household.incoming ? "Leave library" : "Delete library", role: .destructive) { remove(household) }
+                    Button("Cancel", role: .cancel) { libraryToRemove = nil }
+                } message: { household in
+                    Text(removalMessage(household))
+                }
+                .confirmationDialog("Hide this library on this iPhone?", isPresented: $showingHideConfirmation, titleVisibility: .visible, presenting: libraryToHide) { household in
+                    Button("Hide library") {
+                        do { try store.hideIncomingLibrary(household.id); name = store.currentMemberName }
+                        catch { self.error = CloudProblem.message(error) }
+                        libraryToHide = nil
                     }
-                    Button("Cancel", role: .cancel) { libraryAction = nil }
-                } message: { action in
-                    switch action {
-                    case .remove(let household): Text(removalMessage(household))
-                    case .hide: Text("This hides the library only on this iPhone. It keeps the recipes and your sharing access. Use Show hidden libraries to bring it back.")
-                    }
+                    Button("Cancel", role: .cancel) { libraryToHide = nil }
+                } message: { _ in
+                    Text("This hides the library only on this iPhone. It keeps the recipes and your sharing access. Use Show hidden libraries to bring it back.")
                 }
                 .onAppear { name = store.currentMemberName }
                 .onChange(of: store.cloudDiagnostics) { _, _ in copiedDiagnostics = false }
@@ -141,16 +138,9 @@ struct HouseholdSettingsView: View {
                 .supperError($error, title: "Couldn't update household")
         }
     }
-    private enum LibraryAction {
-        case remove(HouseholdSummary)
-        case hide(HouseholdSummary)
-
-        var title: String {
-            switch self {
-            case .remove(let household): return "\(household.incoming ? "Leave" : "Delete") “\(household.name)”?"
-            case .hide: return "Hide this library on this iPhone?"
-            }
-        }
+    private var removalTitle: String {
+        guard let household = libraryToRemove else { return "Remove library?" }
+        return "\(household.incoming ? "Leave" : "Delete") “\(household.name)”?"
     }
     private func removalMessage(_ household: HouseholdSummary) -> String {
         var message = household.incoming
@@ -162,10 +152,11 @@ struct HouseholdSettingsView: View {
         return message
     }
     private func confirmRemoval(_ household: HouseholdSummary) {
-        libraryAction = .remove(household)
+        libraryToRemove = household
+        showingRemovalConfirmation = true
     }
     private func remove(_ household: HouseholdSummary) {
-        libraryAction = nil
+        libraryToRemove = nil
         Task {
             do { try await store.removeHousehold(household.id); name = store.currentMemberName }
             catch { self.error = CloudProblem.message(error) }

@@ -483,13 +483,25 @@ import XCTest
         let options = app.buttons["Library options for Our Supper"]
         XCTAssertTrue(options.waitForExistence(timeout: 5))
         options.tap(); app.buttons["Delete library"].tap()
-        XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout: 5))
-        app.buttons["Cancel"].tap()
+        let confirmationTitle = app.staticTexts["Delete “Our Supper”?"]
+        XCTAssertTrue(confirmationTitle.waitForExistence(timeout: 5))
+        // Native confirmation popovers omit Cancel and dismiss on an outside tap.
+        // Verify that actual dismissal path as well as compact action-sheet Cancel.
+        if app.buttons["Cancel"].exists {
+            app.buttons["Cancel"].tap()
+        } else {
+            let outside = app.otherElements["PopoverDismissRegion"]
+            XCTAssertTrue(outside.waitForExistence(timeout: 5))
+            outside.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.5)).tap()
+        }
+        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: confirmationTitle)
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
         app.buttons["Done"].tap()
         XCTAssertTrue(app.buttons["recipe-test-chicken"].waitForExistence(timeout: 5))
         app.buttons["Library options"].tap(); app.buttons["Household"].tap()
         app.swipeUp()
         options.tap(); app.buttons["Delete library"].tap()
+        XCTAssertTrue(confirmationTitle.waitForExistence(timeout: 5))
         app.buttons["Delete library"].tap()
         expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: app.buttons["Done"])
         waitForExpectations(timeout: 5)
