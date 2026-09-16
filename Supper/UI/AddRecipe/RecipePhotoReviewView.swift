@@ -16,18 +16,21 @@ struct RecipePhotoReviewView: View {
                     if comparisonImage != nil {
                         Picker("Photo comparison", selection: $showingOriginal) {
                             Text(proposal.kind == .enhanced ? "Original" : "Current").tag(true)
-                            Text(proposal.kind == .enhanced ? "Edited" : "Proposed").tag(false)
+                            Text(proposal.kind == .enhanced ? "Generated" : "Proposed").tag(false)
                         }.pickerStyle(.segmented).accessibilityIdentifier("photoComparison")
                     }
                     RecipeImage(data: showingOriginal ? comparisonImage : proposal.image)
                         .aspectRatio(1, contentMode: .fit).clipShape(.rect(cornerRadius: 24))
+                        // A portrait fill can extend above its clipped square and
+                        // intercept the comparison picker. This image is display-only.
+                        .allowsHitTesting(false)
                     Text(proposal.caption).font(.headline).accessibilityIdentifier("recipePhotoCaption")
                     if let source = proposal.source {
                         Link(destination: source.url) { Label(source.title, systemImage: "link") }
                         Text("The source credit is saved in Notes with this photo.").font(.footnote).foregroundStyle(.secondary)
                     }
                     if proposal.kind == .enhanced {
-                        Text("Compare with your original to check the food details before using the edit.").font(.footnote).foregroundStyle(.secondary)
+                        Text("A new cookbook photograph generated using your food as the reference. Compare the food details with your original before using it.").font(.footnote).foregroundStyle(.secondary)
                     } else if proposal.kind == .generated {
                         Text("AI-generated artwork illustrating the dish.").font(.footnote).foregroundStyle(.secondary)
                     }

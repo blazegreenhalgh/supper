@@ -58,7 +58,8 @@ struct RecipePhotoTests {
         let noOriginal = RecipePhotoProposal(image: Data([1]), previousImage: nil, kind: .enhanced)
         #expect(throws: (any Error).self) { try uncredited.applying(to: draft) }
         #expect(throws: (any Error).self) { try noOriginal.applying(to: draft) }
-        let edited = RecipePhotoProposal(image: Data([1]), previousImage: nil, originalPhoto: Data([3]), kind: .enhanced)
-        #expect((try? edited.applying(to: draft).notes.contains("edited with AI")) == true)
+        let fromReference = RecipePhotoProposal(image: Data([1]), previousImage: nil, originalPhoto: Data([3]), kind: .enhanced)
+        #expect((try? fromReference.applying(to: draft).notes.contains("generated with AI using a supplied food photo as reference")) == true)
+        #expect((try? fromReference.applying(to: draft).imageData) == Data([1]))
     }
 }

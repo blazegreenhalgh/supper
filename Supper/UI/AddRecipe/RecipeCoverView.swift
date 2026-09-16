@@ -34,9 +34,9 @@ struct RecipeCoverView: View {
                     TextField(mode == .online ? "Dish, style or a photo/page link" : "Style preferences (optional)", text: $request, axis: .vertical)
                         .lineLimit(2...4).accessibilityIdentifier("coverRequest")
                 } header: { Text(draft.title.isEmpty ? "Recipe photo" : draft.title) } footer: {
-                    Text(mode == .enhanced ? "Polish the lighting, colour and framing of your food photo. The selected image is sent to OpenAI for editing; compare the result with the original before using it." :
+                    Text(mode == .enhanced ? "Create a new top-down cookbook photograph using your photo as the reference for the food. Your selected photo is sent to OpenAI; compare the generated result with the original before using it." :
                          mode == .online ? "Find real photos on published recipe pages, or paste a public photo link. Source credits are kept with your recipe." :
-                         "Create an editorial cover from your recipe title and ingredients. This produces an AI illustration of the dish.")
+                         "Create a top-down editorial cookbook photograph from your recipe title and ingredients. This produces an AI-generated image of the dish.")
                 }
                 Section {
                     if busy {
@@ -106,7 +106,7 @@ struct RecipeCoverView: View {
         if loadingPhoto { ProgressView("Loading photo…") }
     }
 
-    private var actionTitle: String { mode == .online ? "Find photos online" : mode == .generated ? "Generate cover" : "Polish this photo" }
+    private var actionTitle: String { mode == .online ? "Find photos online" : mode == .generated ? "Generate cover" : "Create cookbook photo" }
     private func stop() { requestID = UUID(); task?.cancel(); task = nil; busy = false }
     private func loadPhoto(_ item: PhotosPickerItem?) {
         photoTask?.cancel(); stop(); photos = []; uploadedPhoto = nil; loadingPhoto = item != nil
