@@ -1,13 +1,5 @@
 import Foundation
 
-struct RecipeAssistantReply: Sendable {
-    let message: String
-    let assumptions: [String]
-    let draft: RecipeDraft?
-    let source: RecipeAssistantSource?
-    var adaptations: [String] = []
-}
-
 struct RecipeEditorAssistant {
     static var isAvailable: Bool { (try? OpenAIKeyStore.read()) != nil }
 
@@ -28,42 +20,13 @@ struct RecipeEditorAssistant {
         return result
     }
 
-    func respond(to request: String, draft: RecipeDraft, conversation: String, userInput: String,
-                 progress: @escaping @MainActor @Sendable (String) -> Void) async throws -> RecipeAssistantReply {
-        let request = request.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !request.isEmpty, request.count <= 1200, userInput.count <= 6000, conversation.count <= 8000 else {
-            throw SupperError.invalid("Keep each request under 1,200 characters.")
-        }
+    @MainActor func respond(to request: String, draft: RecipeDraft, conversation: String, userInput: String,
+                            session: RecipeEditSession,
+                            progress: @escaping @MainActor @Sendable (String) -> Void) async throws -> RecipeChatReply {
         let client = try OpenAIKeyStore.client()
-        let context = RecipeAIContext.text(draft)
-        guard context.count <= 40_000 else { throw SupperError.invalid("This recipe is too long for AI editing. You can still edit it manually.") }
-        await progress("Checking what your recipe needs…")
-        let plan = try await client.planRecipeEdit(request: request,
-            context: "USER INPUT:\n\(userInput)\nCONVERSATION:\n\(conversation)\nCURRENT DRAFT:\n\(context)")
-        try Task.checkCancellation()
-        if !plan.question.isEmpty {
-            return RecipeAssistantReply(message: plan.question, assumptions: [], draft: nil, source: nil)
-        }
-        let pages = try await RecipeResearch().find(plan.searchRequest, client: client, explicitSourceText: request, progress: progress)
-        await progress("Preparing changes from a published base recipe…")
-        let result = try await client.groundedRecipeEdit(request: request, draft: draft, sources: pages,
-                                                        userInput: userInput, conversation: conversation)
-        try Task.checkCancellation()
-        let changed = try result.validatedDraft(draft, sources: pages, userInput: userInput)
-        let page = pages.indices.contains(result.sourceIndex) ? pages[result.sourceIndex] : nil
-        let source = page.flatMap { page in page.sourceURL.map { RecipeAssistantSource(title: page.title, url: $0) } }
-        if result.outcome == .adapted, let page {
-            await progress("Checking proportions and cooking method against the source…")
-            let review = try await client.reviewRecipeAdaptation(result, draft: draft, source: page, userInput: userInput)
-            try Task.checkCancellation()
-            guard review.approved else {
-                let message = review.question.isEmpty
-                    ? "I couldn’t support this adaptation with the base recipe. " + review.concern + " Nothing has changed."
-                    : review.question
-                return RecipeAssistantReply(message: message, assumptions: [], draft: nil, source: source)
-            }
-        }
-        return RecipeAssistantReply(message: result.message, assumptions: result.assumptions, draft: changed,
-                                    source: source, adaptations: page.map { result.adaptationNotes(source: $0) } ?? [])
+        return try await session.respond(to: request, draft: draft, conversation: conversation, userInput: userInput,
+            client: client, findSources: { query, explicitSource in
+                try await RecipeResearch().find(query, client: client, explicitSourceText: explicitSource, progress: progress)
+            }, progress: progress)
     }
 }

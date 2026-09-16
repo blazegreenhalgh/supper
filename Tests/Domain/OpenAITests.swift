@@ -37,6 +37,16 @@ import FoundationNetworking
         }
     }
 
+    @Test func incompleteResponsesExplainTheOutputLimitWithoutEchoingProviderContent() throws {
+        let data = Data(#"{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[]}"#.utf8)
+        do {
+            _ = try OpenAIResponse.decode(data)
+            Issue.record("An incomplete response must not be accepted")
+        } catch {
+            #expect(error.localizedDescription.contains("output limit"))
+        }
+    }
+
     @Test func classifiesErrorsWithoutEchoingProviderData() {
         let data = Data("{\"error\":{\"code\":\"insufficient_quota\",\"message\":\"\(fakeKey) private recipe\"}}".utf8)
         #expect(OpenAIClient.apiError(status: 429, data: data).localizedDescription.contains("credits"))
@@ -262,13 +272,13 @@ import FoundationNetworking
             let properties = schema?["properties"] as? [String: Any]
             let action = properties?["action"] as? [String: Any]
             #expect(action?["enum"] as? [String] == ["recipe", "collections", "find_photo", "generate_photo", "enhance_photo", "choose_photo"])
-            return (200, Data(#"{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"{\"action\":\"find_photo\"}"}]}]}"#.utf8))
+            return (200, Data(#"{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"{\"action\":\"find_photo\",\"question\":\"\",\"searchRequest\":\"\",\"reuseSources\":false}"}]}]}"#.utf8))
         }
-        #expect(try await client.recipeChatAction(request: "Find a real photo online; don't generate one", conversation: "") == .findPhoto)
+        #expect(try await client.planRecipeChat(request: "Find a real photo online; don't generate one", context: "").action == .findPhoto)
         let invalid = try makeClient { _ in
             (200, Data(#"{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"{\"action\":\"invent_recipe\"}"}]}]}"#.utf8))
         }
-        await #expect(throws: (any Error).self) { try await invalid.recipeChatAction(request: "Photo please", conversation: "") }
+        await #expect(throws: (any Error).self) { try await invalid.planRecipeChat(request: "Photo please", context: "") }
     }
 
     @Test func recipeAdditionsMustMatchSourceRows() throws {
@@ -299,12 +309,12 @@ import FoundationNetworking
             let body = try Self.body(request)
             #expect(body["store"] as? Bool == false)
             #expect((body["input"] as? String)?.contains("heavy cream, stock, soy sauce") == true)
-            let answer = #"{"question":"How many servings of sauce do you need?","searchRequest":""}"#
+            let answer = #"{"action":"recipe","question":"How many servings of sauce do you need?","searchRequest":"","reuseSources":false}"#
             return (200, try JSONSerialization.data(withJSONObject: ["status": "completed", "output": [
                 ["type": "message", "content": [["type": "output_text", "text": answer]]]
             ]]))
         }
-        let plan = try await client.planRecipeEdit(request: "Find the method", context: "We used heavy cream, stock, soy sauce")
+        let plan = try await client.planRecipeChat(request: "Find the method", context: "We used heavy cream, stock, soy sauce")
         #expect(plan.searchRequest.isEmpty)
         #expect(plan.question.contains("servings"))
         #expect(throws: (any Error).self) { try RecipeEditPlan(question: "How many?", searchRequest: "cream sauce").validate() }
@@ -344,6 +354,148 @@ import FoundationNetworking
         let review = try await client.reviewRecipeAdaptation(edit, draft: .init(), source: source, userInput: "Add cream sauce")
         #expect(!review.approved)
         #expect(!review.techniquePreserved)
+    }
+
+    @MainActor @Test func servingClarificationResumesTheSelectedRecipeWithoutSearchingAgain() async throws {
+        var (draft, source, adapted) = sauceFixture()
+        let initialRequest = "Find ingredients and a method for this recipe. For the sauce We used heavy cream, beef stock flour soy sauce pepper rosemary"
+        draft.title = "Meatballs and rice"
+        draft.servings = nil
+        adapted.patch.servings = 4
+        adapted.patch.ingredients[1].quantity = "100.0"
+        let question = "Use the published recipe's four servings?"
+        let clarification = GroundedRecipeEdit(outcome: .clarification, sourceIndex: 0, message: question,
+            baseRationale: "", assumptions: [], ingredientAdaptations: [], methodAdaptations: [], patch: .init())
+        let approved: [String: Any] = ["baseFits": true, "coreRatiosPreserved": true, "techniquePreserved": true,
+            "changesExplained": true, "ingredientsConsistent": true, "yieldMatches": true, "question": "", "concern": ""]
+        var names: [String] = []
+        var plans = 0, edits = 0, searches = 0
+        let client = try makeClient { request in
+            let body = try Self.body(request)
+            let format = (body["text"] as? [String: Any])?["format"] as? [String: Any]
+            let name = format?["name"] as? String ?? "search"
+            names.append(name)
+            let answer: String
+            switch name {
+            case "recipe_chat_plan":
+                plans += 1
+                #expect((body["max_output_tokens"] as? Int ?? 0) >= 3000)
+                if plans == 1 {
+                    answer = #"{"action":"recipe","question":"How many servings?","searchRequest":"","reuseSources":false}"#
+                } else if plans == 2 {
+                    answer = #"{"action":"recipe","question":" \n","searchRequest":" cream stock sauce \n","reuseSources":false}"#
+                } else {
+                    #expect((body["input"] as? String)?.contains(source.sourceURL!.absoluteString) == true)
+                    answer = #"{"action":"recipe","question":"","searchRequest":"","reuseSources":true}"#
+                }
+            case "search":
+                return (200, try JSONSerialization.data(withJSONObject: ["status": "completed", "output": [
+                    ["type": "web_search_call", "status": "completed", "action": ["type": "search", "sources": [["url": source.sourceURL!.absoluteString]]]]
+                ]]))
+            case "recipe_edit":
+                edits += 1
+                #expect((body["input"] as? String)?.contains("heavy cream") == true)
+                if edits == 2 { #expect((body["input"] as? String)?.contains("Use the recipes servings") == true) }
+                answer = String(decoding: try JSONEncoder().encode(edits == 1 ? clarification : adapted), as: UTF8.self)
+            case "recipe_adaptation_review":
+                answer = String(decoding: try JSONSerialization.data(withJSONObject: approved), as: UTF8.self)
+            default:
+                Issue.record("Unexpected additional request: \(name)")
+                throw SupperError.invalid("Unexpected request")
+            }
+            return (200, try Self.response(answer))
+        }
+        let session = RecipeEditSession()
+        var userInput = initialRequest
+        var history = ""
+        func send(_ request: String) async throws -> RecipeAssistantReply {
+            let response = try await session.respond(to: request, draft: draft, conversation: history, userInput: userInput,
+                client: client, findSources: { query, _ in
+                    searches += 1
+                    #expect(query == "cream stock sauce")
+                    let links = try await client.searchRecipes(query)
+                    #expect(links == [source.sourceURL!])
+                    return [source]
+                }, progress: { _ in })
+            guard case .recipe(let reply) = response else { throw SupperError.invalid("Expected a recipe reply") }
+            history += "\nYou: \(request)\nAssistant: \(reply.message)"
+            return reply
+        }
+
+        #expect(try await send(initialRequest).draft == nil)
+        userInput += "\nIt served two and a one year old for lunch and dinner"
+        let clarificationReply = try await send("It served two and a one year old for lunch and dinner")
+        #expect(clarificationReply.source?.url == source.sourceURL)
+        #expect(clarificationReply.draft == nil)
+        userInput += "\nUse the recipes servings"
+        let reply = try await send("Use the recipes servings")
+
+        #expect(reply.draft?.servings == 4)
+        #expect(reply.draft?.ingredients.count == 6)
+        #expect(reply.source?.url == source.sourceURL)
+        #expect(draft.servings == nil)
+        #expect(searches == 1)
+        #expect(names == ["recipe_chat_plan", "recipe_chat_plan", "search", "recipe_edit", "recipe_chat_plan", "recipe_edit", "recipe_adaptation_review"])
+    }
+
+    @MainActor @Test func failedEditsRetainResearchAndExposeTheFailedStage() async throws {
+        let (draft, source, _) = sauceFixture()
+        var attempts = 0, searches = 0
+        let client = try makeClient { request in
+            let body = try Self.body(request)
+            let format = (body["text"] as? [String: Any])?["format"] as? [String: Any]
+            if format?["name"] as? String == "recipe_chat_plan" {
+                attempts += 1
+                let answer = attempts == 1
+                    ? #"{"action":"recipe","question":"","searchRequest":"cream stock sauce","reuseSources":false}"#
+                    : #"{"action":"recipe","question":"","searchRequest":"","reuseSources":true}"#
+                return (200, try Self.response(answer))
+            }
+            return (200, Data(#"{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[]}"#.utf8))
+        }
+        let session = RecipeEditSession()
+        for _ in 0..<2 {
+            do {
+                _ = try await session.respond(to: sauceRequest, draft: draft, conversation: "", userInput: sauceRequest,
+                    client: client, findSources: { _, _ in searches += 1; return [source] }, progress: { _ in })
+                Issue.record("The incomplete edit must not become a proposal")
+            } catch {
+                #expect(error.localizedDescription.contains("preparing recipe changes"))
+                #expect(error.localizedDescription.contains("output limit"))
+            }
+        }
+        #expect(searches == 1)
+    }
+
+    @MainActor @Test func changingTheDraftInvalidatesRetainedResearch() async throws {
+        let (draft, source, _) = sauceFixture()
+        let client = try makeClient { request in
+            let body = try Self.body(request)
+            let format = (body["text"] as? [String: Any])?["format"] as? [String: Any]
+            if format?["name"] as? String == "recipe_chat_plan" {
+                let input = try #require(body["input"] as? String)
+                #expect(!input.contains(source.sourceURL!.absoluteString))
+                return (200, try Self.response(#"{"action":"recipe","question":"","searchRequest":"cream stock sauce","reuseSources":false}"#))
+            }
+            return (200, Data(#"{"status":"incomplete","output":[]}"#.utf8))
+        }
+        let session = RecipeEditSession()
+        var changed = draft
+        changed.title = "A different dish"
+        var searches = 0
+        for value in [draft, changed] {
+            await #expect(throws: (any Error).self) {
+                try await session.respond(to: sauceRequest, draft: value, conversation: "", userInput: sauceRequest,
+                    client: client, findSources: { _, _ in searches += 1; return [source] }, progress: { _ in })
+            }
+        }
+        #expect(searches == 2)
+    }
+
+    private static func response(_ answer: String) throws -> Data {
+        try JSONSerialization.data(withJSONObject: ["status": "completed", "output": [
+            ["type": "message", "content": [["type": "output_text", "text": answer]]]
+        ]])
     }
 
     private func makeClient(_ handler: @escaping (URLRequest) throws -> (Int, Data)) throws -> OpenAIClient {

@@ -6,6 +6,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AE4000000000000000000001 /* RecipeEditSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE3000000000000000000001; };
 		AD4000000000000000000001 /* RecipePhoto.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD3000000000000000000001; };
 		AD4000000000000000000002 /* RecipePhotoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD3000000000000000000002; };
 		AD4000000000000000000003 /* RecipePhotoReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD3000000000000000000003; };
@@ -66,6 +67,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		AE3000000000000000000001 /* RecipeEditSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Domain/RecipeEditSession.swift"; sourceTree = SOURCE_ROOT; };
 		AD3000000000000000000001 /* RecipePhoto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Domain/RecipePhoto.swift"; sourceTree = SOURCE_ROOT; };
 		AD3000000000000000000002 /* RecipePhotoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/Services/RecipePhotoService.swift"; sourceTree = SOURCE_ROOT; };
 		AD3000000000000000000003 /* RecipePhotoReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Supper/UI/AddRecipe/RecipePhotoReviewView.swift"; sourceTree = SOURCE_ROOT; };
@@ -153,6 +155,7 @@
 			AB3000000000000000000004 /* RecipeResearch.swift */,
 			AB3000000000000000000003 /* OpenAIKeyStore.swift */,
 			AB3000000000000000000002 /* RecipeAIEvidence.swift */,
+			AE3000000000000000000001 /* RecipeEditSession.swift */,
 			AB3000000000000000000001 /* OpenAIClient.swift */,
 			EB52FDF6D2386E5D54345596 /* RecipeEditorChatView.swift */,
 			AC3000000000000000000001 /* RecipeAssistantReviewView.swift */,
@@ -265,6 +268,7 @@
 			AB4000000000000000000004 /* RecipeResearch.swift in Sources */,
 			AB4000000000000000000003 /* OpenAIKeyStore.swift in Sources */,
 			AB4000000000000000000002 /* RecipeAIEvidence.swift in Sources */,
+			AE4000000000000000000001 /* RecipeEditSession.swift in Sources */,
 			AB4000000000000000000001 /* OpenAIClient.swift in Sources */,
 			0901D0E66DADCDEE6FBFFD26 /* RecipeEditorChatView.swift in Sources */,
 			AC4000000000000000000001 /* RecipeAssistantReviewView.swift in Sources */,

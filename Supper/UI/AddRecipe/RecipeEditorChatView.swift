@@ -25,6 +25,7 @@ struct RecipeChatMessage: Identifiable {
     @Published private(set) var error: String?
     @Published private(set) var retryRequest: String?
     @Published var editingField: String?
+    private let recipeSession = RecipeEditSession()
     private var task: Task<Void, Never>?
     private var requestID: UUID?
     private var activeRequest = ""
@@ -46,8 +47,9 @@ struct RecipeChatMessage: Identifiable {
         let previous = pending.flatMap { $0.base == draft ? $0 : nil }
         let working = previous?.suggested ?? draft
         let history = messages.suffix(6).map { ($0.isUser ? "You: " : "Assistant: ") + String($0.text.prefix(1200)) }.joined(separator: "\n")
-        let userInput = (messages.filter(\.isUser).suffix(3).map(\.text) + [text]).joined(separator: "\n")
-        messages.append(RecipeChatMessage(text: text, isUser: true))
+        let isRetry = retryRequest == text && messages.last?.isUser == true && messages.last?.text == text
+        let userInput = (messages.filter(\.isUser).map(\.text) + (isRetry ? [] : [text])).joined(separator: "\n")
+        if !isRetry { messages.append(RecipeChatMessage(text: text, isUser: true)) }
         input = ""; error = nil; retryRequest = nil; activeRequest = text
         busy = true; progress = "Understanding your request…"
         let id = UUID(); requestID = id
@@ -55,12 +57,35 @@ struct RecipeChatMessage: Identifiable {
             guard let self else { return }
             defer { if requestID == id { busy = false; task = nil; requestID = nil } }
             do {
-                let action: RecipeChatAction
-                if let explicitAction { action = explicitAction }
-                else { action = try await OpenAIKeyStore.client().recipeChatAction(request: text, conversation: history) }
+                let response: RecipeChatReply
+                if let explicitAction {
+                    recipeSession.reset()
+                    response = .action(explicitAction)
+                } else {
+                    response = try await RecipeEditorAssistant().respond(to: text, draft: working,
+                        conversation: history, userInput: userInput, session: recipeSession) { [weak self] status in
+                        guard self?.requestID == id else { return }
+                        self?.progress = status
+                    }
+                }
                 try Task.checkCancellation()
                 guard requestID == id else { return }
                 choosingPhoto = false; needsPhotoUpload = false
+                let action: RecipeChatAction
+                switch response {
+                case .recipe(let reply):
+                    let sources = reply.source.map { [$0] } ?? []
+                    if let changed = reply.draft {
+                        let proposal = RecipeAssistantProposal(base: draft, suggested: changed, sources: (previous?.sources ?? []) + sources,
+                            adaptations: (previous?.adaptations ?? []) + reply.adaptations,
+                            assumptions: (previous?.assumptions ?? []) + reply.assumptions)
+                        pending = proposal.changes.isEmpty ? nil : proposal
+                    }
+                    // Clarifications and declined adaptations leave any earlier proposal intact.
+                    messages.append(RecipeChatMessage(text: reply.message, sources: sources, assumptions: reply.assumptions, adaptations: reply.adaptations))
+                    return
+                case .action(let routed): action = routed
+                }
                 if action == .collections {
                     progress = "Checking your collections…"
                     let edit = try await RecipeEditorAssistant().collections(for: text, draft: draft, available: collections, conversation: history)
@@ -92,21 +117,6 @@ struct RecipeChatMessage: Identifiable {
                     messages.append(RecipeChatMessage(text: kind == .online ? "Found \(found.count) online photo option\(found.count == 1 ? "" : "s"). Preview one, then choose Use photo to set it on your draft." : "Your photo is ready to preview. Choose Use photo when you’re happy with it.", sources: found.compactMap(\.source)))
                     return
                 }
-                let reply = try await RecipeEditorAssistant().respond(to: text, draft: working, conversation: history, userInput: userInput) { [weak self] status in
-                    guard self?.requestID == id else { return }
-                    self?.progress = status
-                }
-                try Task.checkCancellation()
-                guard requestID == id else { return }
-                let sources = reply.source.map { [$0] } ?? []
-                if let changed = reply.draft {
-                    let proposal = RecipeAssistantProposal(base: draft, suggested: changed, sources: (previous?.sources ?? []) + sources,
-                        adaptations: (previous?.adaptations ?? []) + reply.adaptations,
-                        assumptions: (previous?.assumptions ?? []) + reply.assumptions)
-                    pending = proposal.changes.isEmpty ? nil : proposal
-                }
-                // Clarifications and declined adaptations leave any earlier proposal intact.
-                messages.append(RecipeChatMessage(text: reply.message, sources: sources, assumptions: reply.assumptions, adaptations: reply.adaptations))
             } catch {
                 guard requestID == id, !Task.isCancelled else { return }
                 self.error = error.localizedDescription
@@ -167,6 +177,7 @@ struct RecipeChatMessage: Identifiable {
             let changed = try pending.applying(to: draft)
             undoStack.append(RecipeAssistantUndo(before: draft, after: changed))
             draft = changed; self.pending = nil; error = nil; retryRequest = nil
+            recipeSession.reset()
             messages.append(RecipeChatMessage(text: "Applied to your draft. Tap Save in the recipe editor when you’re ready."))
         } catch { self.error = error.localizedDescription }
     }
@@ -174,6 +185,7 @@ struct RecipeChatMessage: Identifiable {
     func discard() {
         guard !busy else { return }
         pending = nil; error = nil; retryRequest = nil
+        recipeSession.reset()
         messages.append(RecipeChatMessage(text: "Suggestion discarded. Your recipe hasn’t changed."))
     }
 
@@ -181,6 +193,7 @@ struct RecipeChatMessage: Identifiable {
         guard !busy, editingField == nil, let last = undoStack.last else { return }
         do {
             draft = try last.restoring(draft); undoStack.removeLast(); pending = nil; pendingCollections = nil; photos = []; error = nil
+            recipeSession.reset()
             messages.append(RecipeChatMessage(text: "Undid the last AI edit."))
         } catch { self.error = error.localizedDescription }
     }
@@ -307,6 +320,8 @@ struct RecipeEditorChatView: View {
                     if let error = session.error {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(error).font(.callout).foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .contextMenu { Button("Copy error details", systemImage: "doc.on.doc") { UIPasteboard.general.string = error } }
                             if let request = session.retryRequest, !session.busy {
                                 Button("Try again", systemImage: "arrow.clockwise") {
                                     session.input = request; send()

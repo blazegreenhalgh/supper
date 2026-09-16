@@ -165,7 +165,7 @@ private let naanSource = RecipeAssistantSource(title: "Naan", url: URL(string: "
     #expect(draft.steps.last?.text == "Fill with cheese before rolling.")
 }
 
-private func sauceFixture() -> (RecipeDraft, RecipeDraft, GroundedRecipeEdit) {
+func sauceFixture() -> (RecipeDraft, RecipeDraft, GroundedRecipeEdit) {
     let draft = RecipeDraft(title: "Our creamy beef sauce", servings: 4)
     let source = RecipeDraft(title: "Cream and stock sauce", servings: 4,
         sourceURL: URL(string: "https://recipes.example/cream-sauce")!,
@@ -195,7 +195,7 @@ private func sauceFixture() -> (RecipeDraft, RecipeDraft, GroundedRecipeEdit) {
     return (draft, source, edit)
 }
 
-private let sauceRequest = "Find a sauce for four with beef stock, heavy cream, plain flour, soy sauce, pepper and rosemary."
+let sauceRequest = "Find a sauce for four with beef stock, heavy cream, plain flour, soy sauce, pepper and rosemary."
 
 @Test func sauceCanUsePublishedFoundationWithoutExactSeasoningMatch() throws {
     let (draft, source, edit) = sauceFixture()
@@ -257,6 +257,39 @@ private let sauceRequest = "Find a sauce for four with beef stock, heavy cream, 
     let (draft, source, edit) = sauceFixture()
     #expect(throws: (any Error).self) { try edit.validatedDraft(draft, sources: [source], userInput: "Four people") }
     #expect(try edit.validatedDraft(draft, sources: [source], userInput: sauceRequest + "\nFour people") != nil)
+}
+
+@Test func equivalentAmountsDoNotRejectAGroundedAdaptation() throws {
+    let (draft, source, initial) = sauceFixture()
+    var edit = initial
+    edit.patch.ingredients[1].quantity = "100.0"
+    edit.patch.ingredients[5].quantity = "¼"
+
+    let result = try edit.validatedDraft(draft, sources: [source], userInput: sauceRequest)
+
+    #expect(result?.ingredients.count == 6)
+    edit.patch.ingredients[1].quantity = "101"
+    #expect(throws: (any Error).self) { try edit.validatedDraft(draft, sources: [source], userInput: sauceRequest) }
+    edit = initial
+    edit.patch.ingredients[1].unit = "cups"
+    #expect(throws: (any Error).self) { try edit.validatedDraft(draft, sources: [source], userInput: sauceRequest) }
+}
+
+@Test func whitespaceDoesNotInvalidateAResearchPlan() throws {
+    let plan = RecipeEditPlan(question: " \n", searchRequest: " cream and stock sauce \n")
+    try plan.validate()
+}
+
+@Test func researchPlansCannotReuseMissingSourcesOrMixActions() throws {
+    let reuse = RecipeEditPlan(question: "", searchRequest: "", reuseSources: true)
+    #expect(throws: (any Error).self) { try reuse.validate() }
+    try reuse.validate(hasSources: true)
+    #expect(throws: (any Error).self) {
+        try RecipeEditPlan(action: .findPhoto, question: "", searchRequest: "", reuseSources: true).validate(hasSources: true)
+    }
+    #expect(throws: (any Error).self) {
+        try RecipeEditPlan(question: "How many?", searchRequest: "", reuseSources: true).validate(hasSources: true)
+    }
 }
 
 @Test func reviewCannotApproveIfAnyCheckFailsOrAQuestionRemains() throws {
