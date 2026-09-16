@@ -51,4 +51,6 @@ In the recipe editor, open Ingredients → Auto format to review sentence case, 
 
 `swift test` covers formatting, quantities, merging, groups, editing, filtering, identity and persistence migration. The iOS UI suite covers native navigation/search, formatting review/cancel, tags, grocery selection and full-screen method. Foundation Models generation itself also needs a supported physical device with Apple Intelligence enabled; simulator tests exercise the deterministic fallback.
 
+See [Running tests](docs/testing.md) for focused UI checks and the four CI suites.
+
 Full-screen method steps use OpenAI to match references to earlier steps and ingredient groups. Only existing ingredient IDs are accepted; displayed names and scaled amounts come from saved ingredients. Amounts are recipe totals, not invented allocations for “half” or “remaining” instructions. Matching is cached while the method view remains open, cancels on dismissal, and falls back to explicit local mentions when unavailable. All ingredients remains accessible in a disclosure.

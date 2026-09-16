@@ -10,20 +10,33 @@ concurrency:
   group: validate-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
-  regression:
+  core:
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 5
+    outputs:
+      ui-matrix: ${{ steps.suites.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate UI coverage and select suites
+        id: suites
+        run: |
+          matrix=$(python3 .github/scripts/ui_test_shards.py --matrix)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+      - name: Select Xcode 26
+        run: sudo xcode-select -s /Applications/Xcode_26.0.app/Contents/Developer
+      - name: Domain and persistence regression tests
+        run: swift test
+  regression:
+    needs: core
+    runs-on: macos-15
+    timeout-minutes: 20
     strategy:
       fail-fast: false
-      matrix:
-        suite: [editor, library]
+      matrix: ${{ fromJSON(needs.core.outputs.ui-matrix) }}
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode 26
         run: sudo xcode-select -s /Applications/Xcode_26.0.app/Contents/Developer
-      - name: Domain and persistence regression tests
-        if: matrix.suite == 'library'
-        run: swift test
       - name: Build app and UI tests once
         # Keychain tests need an ad-hoc signed app with an application identity;
         # shipping entitlements are unchanged. Build against the SDK before asking
@@ -33,29 +46,13 @@ jobs:
         env:
           SUPPER_TEST_SUITE: ${{ matrix.suite }}
         run: |
-          # These two complementary selections cover every UI test exactly once.
-          # Keep one test session per worker: repeated sessions previously added
-          # several minutes each. The split balances recorded execution times.
-          editor_tests=(
-            testChatCollectionChangesApplyToDraftAndOnlyPersistOnSave
-            testRecipeChatKeepsInputWhenReopenedAndCancelDoesNotSave
-            testRecipeChatPreviewShowsRemovalsAndAppliesAndUndoesInPlace
-            testRecipeChatRetainsSessionAcrossEditorsAndProtectsManualChanges
-            testRecipeDragMovesBetweenHomeCollections
-            testRecipePhotosPreviewOriginalAndApplyWithUndoAndUploadOption
-            testFormattingReviewCancelAndDraftOnlyApply
-            testIngredientAndSectionDragsPersistOnSave
-            testTagsSheetAndSimpleGrocerySelection
-            testMainTagsCreateRenameDeleteAndIndividualEntry
-          )
+          # One simulator/session per worker, with every test assigned exactly
+          # once by the same source that creates the matrix.
+          selection_text=$(python3 .github/scripts/ui_test_shards.py --suite "$SUPPER_TEST_SUITE")
           selection=()
-          for test_name in "${editor_tests[@]}"; do
-            if [ "$SUPPER_TEST_SUITE" = editor ]; then
-              selection+=("-only-testing:SupperUITests/SupperUITests/$test_name")
-            else
-              selection+=("-skip-testing:SupperUITests/SupperUITests/$test_name")
-            fi
-          done
+          while IFS= read -r argument; do
+            selection+=("$argument")
+          done <<< "$selection_text"
           set +e
           xcodebuild -project Supper.xcodeproj -scheme Supper -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -parallel-testing-enabled NO -derivedDataPath DerivedData -resultBundlePath UIResults "${selection[@]}" test-without-building 2>&1 | tee UITestRun.log
           test_status=${PIPESTATUS[0]}
