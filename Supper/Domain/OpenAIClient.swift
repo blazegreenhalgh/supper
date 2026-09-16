@@ -133,7 +133,7 @@ public struct OpenAIClient: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
         do {
-            let (data, response) = try await response(for: request, timeout: isImageRequest ? imageRequestTimeout : .seconds(90))
+            let (data, response) = try await self.response(for: request, timeout: isImageRequest ? imageRequestTimeout : .seconds(90))
             try Task.checkCancellation()
             guard let http = response as? HTTPURLResponse else { throw OpenAIResponse.invalid }
             guard (200..<300).contains(http.statusCode) else { throw Self.apiError(status: http.statusCode, data: data) }
